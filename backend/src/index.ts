@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRouter from './routes/auth';
 import profileRouter from './routes/profile';
+import uploadRouter from './routes/upload';
 
 dotenv.config();
 
@@ -31,6 +32,7 @@ app.get('/health', (_req, res) => {
 
 app.use('/auth', authRouter);
 app.use('/profile', profileRouter);
+app.use('/api/upload', uploadRouter);
 
 // ─── 404 catch-all ───────────────────────────────────────────────────────────
 
@@ -45,7 +47,9 @@ app.listen(PORT, () => {
   console.log(`   GET  /health`);
   console.log(`   POST /auth/signup`);
   console.log(`   POST /auth/login`);
-  console.log(`   GET  /profile/me  (protected)\n`);
+  console.log(`   GET  /profile/me  (protected)`);
+  console.log(`   POST /api/upload  (protected)`);
+  console.log(`   GET  /api/upload  (protected)\n`);
 });
 
 export default app;

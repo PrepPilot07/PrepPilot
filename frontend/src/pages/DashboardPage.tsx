@@ -90,6 +90,7 @@ function StepCard({
   cta,
   active,
   done,
+  onCtaClick,
 }: {
   step: number;
   icon: React.ReactNode;
@@ -98,6 +99,7 @@ function StepCard({
   cta: string;
   active: boolean;
   done: boolean;
+  onCtaClick?: () => void;
 }) {
   return (
     <div
@@ -147,8 +149,13 @@ function StepCard({
 
       {active && (
         <button
-          className="mt-auto flex items-center gap-2 text-sm font-medium text-violet-400 hover:text-violet-300 transition-colors group"
-          disabled
+          onClick={onCtaClick}
+          disabled={!onCtaClick}
+          className={`mt-auto flex items-center gap-2 text-sm font-medium transition-colors group ${
+            onCtaClick
+              ? 'text-violet-400 hover:text-violet-300 cursor-pointer'
+              : 'text-gray-600 cursor-not-allowed'
+          }`}
         >
           {cta}
           <IconChevronRight />
@@ -278,6 +285,7 @@ export default function DashboardPage() {
               cta="Upload your documents"
               active={true}
               done={false}
+              onCtaClick={() => navigate('/upload')}
             />
             <StepCard
               step={3}
