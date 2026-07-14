@@ -30,3 +30,7 @@ logs/
 # ─── Uploads / Temp ──────────────────────────────────────────
 uploads/
 tmp/
+
+# Python
+__pycache__/
+*.pyc
