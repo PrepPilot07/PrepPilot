@@ -117,11 +117,13 @@ export interface UploadResult {
 export async function uploadDocuments(
   token: string,
   resumeFile: File,
-  jdText: string
+  jdText: string,
+  days: number
 ): Promise<{ data?: UploadResult; error?: string; status: number }> {
   const formData = new FormData();
   formData.append('resume', resumeFile);
   formData.append('jdText', jdText);
+  formData.append('days', String(days));
 
   try {
     const res = await fetch(`${API_BASE}/api/upload`, {

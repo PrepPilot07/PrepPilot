@@ -102,6 +102,29 @@ export async function fetchPractice(
   }
 }
 
+export async function generateRoadmap(
+  token: string,
+  days: number
+): Promise<{ data?: RoadmapResponse; error?: string; status: number }> {
+  try {
+    const res = await fetch(`${API_BASE}/api/roadmap/generate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ days }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { status: res.status, error: (body as { error?: string }).error || 'Failed to generate roadmap' };
+    }
+    return { status: res.status, data: body as RoadmapResponse };
+  } catch {
+    return { status: 0, error: 'Network error — make sure the backend server is running.' };
+  }
+}
+
 export async function fetchDayAnswers(
   token: string,
   dayId: string

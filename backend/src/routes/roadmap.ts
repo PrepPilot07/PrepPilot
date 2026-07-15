@@ -4,6 +4,8 @@ import { verifyToken, AuthRequest } from '../middleware/auth';
 import { generatePracticeContent } from '../services/practiceContent';
 import { scoreAnswer } from '../services/answerScoring';
 
+import { generateRoadmap, MIN_DAYS, MAX_DAYS } from '../services/roadmapGeneration';
+
 const router = Router();
 
 // ── GET /api/roadmap ──────────────────────────────────────────────────────────
@@ -67,6 +69,111 @@ router.get('/', verifyToken, async (req: AuthRequest, res: Response): Promise<vo
   } catch (err) {
     console.error('[roadmap] GET error:', err);
     res.status(500).json({ error: 'Failed to fetch roadmap' });
+  }
+});
+
+// ── POST /api/roadmap/generate ────────────────────────────────────────────────
+// Generate a fresh N-day roadmap via the LLM and persist it for the user,
+// replacing any existing roadmap. Reuses the same storage shape as the upload
+// pipeline so the frontend renders it with no changes.
+
+router.post('/generate', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.userId!;
+  const daysRaw = req.body?.days;
+  const days = Number(daysRaw);
+
+  if (!Number.isInteger(days) || days < MIN_DAYS || days > MAX_DAYS) {
+    res.status(400).json({ error: `days must be an integer between ${MIN_DAYS} and ${MAX_DAYS}` });
+    return;
+  }
+
+  // Generate first (outside the transaction — this is the slow, failure-prone part).
+  let plan;
+  try {
+    plan = await generateRoadmap(days);
+  } catch (err) {
+    console.error('[roadmap] generate error:', err);
+    res.status(502).json({ error: "Couldn't generate your roadmap. Please try again." });
+    return;
+  }
+
+  const interviewDate = new Date();
+  interviewDate.setDate(interviewDate.getDate() + days);
+  const interviewDateStr = interviewDate.toISOString().split('T')[0];
+
+  const minDayNumber = Math.min(...plan.map((d) => d.day_number));
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // One roadmap per user — upsert and replace its questions.
+    const roadmapRes = await client.query(
+      `INSERT INTO roadmaps (user_id, topics, interview_date)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (user_id) DO UPDATE
+         SET topics = EXCLUDED.topics,
+             interview_date = EXCLUDED.interview_date,
+             created_at = NOW()
+       RETURNING id, interview_date, created_at`,
+      [userId, JSON.stringify(plan), interviewDateStr]
+    );
+    const roadmap = roadmapRes.rows[0];
+    const roadmapId = roadmap.id as string;
+
+    await client.query(`DELETE FROM questions WHERE roadmap_id = $1`, [roadmapId]);
+
+    const insertedDays = [];
+    for (const day of plan) {
+      const insertRes = await client.query(
+        `INSERT INTO questions
+           (roadmap_id, day_number, topic, question_text, learning_goal, difficulty, focus_skill, status)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         RETURNING id, day_number, topic, question_text, learning_goal, difficulty, focus_skill,
+                   status, completed_at, sent_at`,
+        [
+          roadmapId,
+          day.day_number,
+          day.topic,
+          day.question_text,
+          day.learning_goal,
+          day.difficulty,
+          day.focus_skill,
+          day.day_number === minDayNumber ? 'today' : 'locked',
+        ]
+      );
+      insertedDays.push(insertRes.rows[0]);
+    }
+
+    await client.query('COMMIT');
+
+    // Respond in the same shape as GET /api/roadmap so the frontend can drop it
+    // straight into state. Fresh days have no practice content generated yet.
+    res.status(201).json({
+      roadmap_id: roadmapId,
+      interview_date: roadmap.interview_date,
+      created_at: roadmap.created_at,
+      completed_count: 0,
+      days: insertedDays.map((row) => ({
+        id: row.id,
+        day_number: row.day_number,
+        topic: row.topic,
+        question_text: row.question_text,
+        learning_goal: row.learning_goal,
+        difficulty: row.difficulty,
+        focus_skill: row.focus_skill,
+        status: row.status,
+        completed_at: row.completed_at,
+        sent_at: row.sent_at,
+        has_practice_content: false,
+      })),
+    });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => undefined);
+    console.error('[roadmap] generate persist error:', err);
+    res.status(500).json({ error: 'Failed to save the generated roadmap' });
+  } finally {
+    client.release();
   }
 });
 

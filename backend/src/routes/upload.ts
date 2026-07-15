@@ -5,6 +5,7 @@ import axios from 'axios';
 import FormData from 'form-data';
 import pool from '../db/pool';
 import { verifyToken, AuthRequest } from '../middleware/auth';
+import { generateRoadmap } from '../services/roadmapGeneration';
 
 const router = Router();
 
@@ -123,23 +124,39 @@ router.post(
       return;
     }
 
-    // ── Persist roadmap + questions (Wave 4 output) ────────────────────────────
-    const roadmapData = report.roadmap as {
-      days?: Array<{
-        day_number: number;
-        topic: string;
-        question_text: string;
-        learning_goal?: string;
-        difficulty?: string;
-        focus_skill?: string;
-      }>;
-      summary?: string;
-    } | undefined;
+    // ── Persist roadmap + questions ────────────────────────────────────────────
+    // Roadmap length is driven by the user's "days until interview" (N). We
+    // generate a fresh N-day plan via the LLM; if that fails we fall back to the
+    // Python pipeline's roadmap so the user still gets a plan.
+    type RoadmapDayData = {
+      day_number: number;
+      topic: string;
+      question_text: string;
+      learning_goal?: string | null;
+      difficulty?: string | null;
+      focus_skill?: string | null;
+    };
+    const pythonDays = (report.roadmap as { days?: RoadmapDayData[] } | undefined)?.days;
 
-    if (roadmapData?.days && Array.isArray(roadmapData.days) && roadmapData.days.length > 0) {
+    // Validate requested days (1–60); default to 15 if missing/invalid.
+    let prepDays = Number.parseInt(String(req.body?.days ?? ''), 10);
+    if (!Number.isInteger(prepDays) || prepDays < 1 || prepDays > 60) prepDays = 15;
+
+    let daysToPersist: RoadmapDayData[] | null = null;
+    try {
+      daysToPersist = await generateRoadmap(prepDays);
+    } catch (genErr) {
+      console.error('[upload] roadmap generation failed, falling back to pipeline roadmap:', genErr);
+      if (Array.isArray(pythonDays) && pythonDays.length > 0) {
+        daysToPersist = pythonDays;
+      }
+    }
+
+    if (daysToPersist && daysToPersist.length > 0) {
       try {
+        // interview_date reflects however many days we actually persisted.
         const interviewDate = new Date();
-        interviewDate.setDate(interviewDate.getDate() + 15);
+        interviewDate.setDate(interviewDate.getDate() + daysToPersist.length);
         const interviewDateStr = interviewDate.toISOString().split('T')[0];
 
         // Upsert roadmap row — one per user
@@ -151,7 +168,7 @@ router.post(
                  interview_date = EXCLUDED.interview_date,
                  created_at = NOW()
            RETURNING id`,
-          [userId, JSON.stringify(roadmapData.days), interviewDateStr]
+          [userId, JSON.stringify(daysToPersist), interviewDateStr]
         );
         const roadmapId = roadmapRes.rows[0].id as string;
 
@@ -160,9 +177,9 @@ router.post(
 
         // The earliest day starts as the active ('today') day; the rest are locked
         // until the user completes each one in turn.
-        const minDayNumber = Math.min(...roadmapData.days.map((d) => d.day_number));
+        const minDayNumber = Math.min(...daysToPersist.map((d) => d.day_number));
 
-        for (const day of roadmapData.days) {
+        for (const day of daysToPersist) {
           await pool.query(
             `INSERT INTO questions (roadmap_id, day_number, topic, question_text, learning_goal, difficulty, focus_skill, status)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
@@ -179,7 +196,7 @@ router.post(
           );
         }
 
-        console.log(`[upload] Roadmap upserted (${roadmapData.days.length} questions) for user ${userId}`);
+        console.log(`[upload] Roadmap upserted (${daysToPersist.length} days) for user ${userId}`);
       } catch (roadmapErr) {
         // Non-fatal: log and continue — analysis result is already saved
         console.error('[upload] Roadmap DB error (non-fatal):', roadmapErr);

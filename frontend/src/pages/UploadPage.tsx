@@ -254,6 +254,7 @@ export default function UploadPage() {
 
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [jdText, setJdText] = useState('');
+  const [days, setDays] = useState<number>(15);
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [error, setError] = useState('');
@@ -286,10 +287,14 @@ export default function UploadPage() {
   // ── Submit ──────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!token || !resumeFile || !jdText.trim()) return;
+    if (!Number.isInteger(days) || days < 1 || days > 60) {
+      setError('Enter days until your interview (between 1 and 60).');
+      return;
+    }
     setStatus('loading');
     setError('');
 
-    const resp = await uploadDocuments(token, resumeFile, jdText);
+    const resp = await uploadDocuments(token, resumeFile, jdText, days);
 
     if (resp.error || !resp.data) {
       setStatus('error');
@@ -303,7 +308,13 @@ export default function UploadPage() {
     navigate('/analysis', { state: { result: resp.data } });
   };
 
-  const canSubmit = !!resumeFile && jdText.trim().length > 20 && status !== 'loading';
+  const canSubmit =
+    !!resumeFile &&
+    jdText.trim().length > 20 &&
+    Number.isInteger(days) &&
+    days >= 1 &&
+    days <= 60 &&
+    status !== 'loading';
 
   return (
     <div className="p-6 md:p-8 max-w-4xl mx-auto space-y-7 animate-in fade-in duration-500 pb-16">
@@ -427,6 +438,27 @@ export default function UploadPage() {
             </div>
           </div>
 
+          {/* ── Days until interview ─────────────────────────────────────── */}
+          <div className="flex flex-col gap-3">
+            <label
+              htmlFor="days-input"
+              className="text-sm font-semibold text-gray-900 flex items-center gap-2"
+            >
+              <span className="w-5 h-5 rounded-md bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-700 text-xs font-bold">3</span>
+              Days until your interview
+              <span className="text-xs font-normal text-gray-400">used to size your roadmap &middot; 1&ndash;60</span>
+            </label>
+            <input
+              id="days-input"
+              type="number"
+              min={1}
+              max={60}
+              value={Number.isNaN(days) ? '' : days}
+              onChange={e => setDays(Math.floor(e.target.valueAsNumber))}
+              className="w-40 px-4 py-3 rounded-2xl bg-white border border-gray-200 text-sm text-gray-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all"
+            />
+          </div>
+
           {/* Error banner */}
           {(error || status === 'error') && (
             <div className="flex items-start gap-3 px-5 py-4 rounded-2xl bg-red-50 border border-red-100 text-sm text-red-700">
@@ -459,7 +491,7 @@ export default function UploadPage() {
                     <span key={a} className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 animate-pulse font-medium">{a}</span>
                   ))}
                 </div>
-                <p className="text-xs text-gray-400 mt-3">This usually takes 20-40 seconds</p>
+                <p className="text-xs text-gray-400 mt-3">Analysing your profile and building your roadmap — this usually takes 30-60 seconds</p>
               </div>
             </div>
           )}
