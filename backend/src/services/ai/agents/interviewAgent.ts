@@ -1,4 +1,4 @@
-import { callGemini } from '../callClaude';
+import { callGemini } from '../callGemini';
 import type { ParsedResume, ParsedJD, InterviewQuestionsResult } from '../types';
 
 const SYSTEM = `You are an expert technical interviewer. Generate targeted interview questions for a candidate.

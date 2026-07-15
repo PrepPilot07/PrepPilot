@@ -1,4 +1,4 @@
-import { callGemini } from '../callClaude';
+import { callGemini } from '../callGemini';
 import type { ParsedResume, ParsedJD, SkillMatchResult } from '../types';
 
 const SYSTEM = `You are a technical recruiter specialising in skills assessment.

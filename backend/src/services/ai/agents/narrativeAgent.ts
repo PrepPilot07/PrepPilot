@@ -1,4 +1,4 @@
-import { callGemini } from '../callClaude';
+import { callGemini } from '../callGemini';
 import type { ParsedResume, ParsedJD, NarrativeResult } from '../types';
 
 const SYSTEM = `You are a senior recruiter writing an executive summary for an internal hiring committee.

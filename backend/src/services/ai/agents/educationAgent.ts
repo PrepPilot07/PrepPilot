@@ -1,4 +1,4 @@
-import { callGemini } from '../callClaude';
+import { callGemini } from '../callGemini';
 import type { ParsedResume, ParsedJD, EducationResult } from '../types';
 
 const SYSTEM = `You are an HR specialist evaluating whether a candidate's educational background meets job requirements.

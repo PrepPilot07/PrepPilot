@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import pool from '../db/pool';
 import { verifyToken, AuthRequest } from '../middleware/auth';
 import { generatePracticeContent } from '../services/practiceContent';
+import { scoreAnswer } from '../services/answerScoring';
 
 const router = Router();
 
@@ -212,6 +213,123 @@ router.post('/:dayId/complete', verifyToken, async (req: AuthRequest, res: Respo
     res.status(500).json({ error: 'Failed to mark day as complete' });
   } finally {
     client.release();
+  }
+});
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+interface PracticeQuestionRow {
+  id: string;
+  text: string;
+  difficulty?: string | null;
+}
+
+// ── POST /api/roadmap/:dayId/questions/:questionId/answers ─────────────────────
+// Submit an answer to a single practice question, score it via the shared
+// scoreAnswer() service, persist it, and return the scored answer.
+
+router.post(
+  '/:dayId/questions/:questionId/answers',
+  verifyToken,
+  async (req: AuthRequest, res: Response): Promise<void> => {
+    const userId = req.userId!;
+    const { dayId, questionId } = req.params;
+    const answerText = (req.body?.answer_text as string | undefined)?.trim();
+
+    if (!answerText) {
+      res.status(400).json({ error: 'answer_text is required' });
+      return;
+    }
+
+    try {
+      const dayRes = await pool.query(
+        `SELECT q.id, q.status, q.practice_questions
+         FROM questions q
+         JOIN roadmaps r ON r.id = q.roadmap_id
+         WHERE q.id = $1 AND r.user_id = $2`,
+        [dayId, userId]
+      );
+
+      if (dayRes.rows.length === 0) {
+        res.status(404).json({ error: 'Day not found or does not belong to your roadmap' });
+        return;
+      }
+
+      const day = dayRes.rows[0];
+
+      if (day.status === 'locked') {
+        res.status(403).json({ error: 'This day is locked. Complete earlier days first.' });
+        return;
+      }
+
+      // The practice question lives inside the day's practice_questions JSONB.
+      const questions: PracticeQuestionRow[] = Array.isArray(day.practice_questions)
+        ? day.practice_questions
+        : [];
+      const question = questions.find((q) => q.id === questionId);
+
+      if (!question) {
+        res.status(404).json({ error: 'Practice question not found for this day' });
+        return;
+      }
+
+      // Shared scoring logic (same function the WhatsApp path will use later).
+      const { score, feedback } = await scoreAnswer({
+        questionText: question.text,
+        difficulty: question.difficulty,
+        answerText,
+      });
+
+      const insertRes = await pool.query(
+        `INSERT INTO practice_answers
+           (user_id, day_id, question_id, answer_text, source, ai_score, ai_feedback)
+         VALUES ($1, $2, $3, $4, 'web', $5, $6)
+         RETURNING id, day_id, question_id, answer_text, source, ai_score, ai_feedback, created_at`,
+        [userId, dayId, questionId, answerText, score, feedback]
+      );
+
+      res.status(201).json(insertRes.rows[0]);
+    } catch (err) {
+      console.error('[roadmap] POST answer error:', err);
+      res.status(500).json({ error: 'Failed to submit answer' });
+    }
+  }
+);
+
+// ── GET /api/roadmap/:dayId/answers ───────────────────────────────────────────
+// Returns all of the user's submitted answers for a day (across every practice
+// question), newest first, so the modal can prefill existing scores in one call.
+
+router.get('/:dayId/answers', verifyToken, async (req: AuthRequest, res: Response): Promise<void> => {
+  const userId = req.userId!;
+  const { dayId } = req.params;
+
+  try {
+    const dayRes = await pool.query(
+      `SELECT q.id
+       FROM questions q
+       JOIN roadmaps r ON r.id = q.roadmap_id
+       WHERE q.id = $1 AND r.user_id = $2`,
+      [dayId, userId]
+    );
+
+    if (dayRes.rows.length === 0) {
+      res.status(404).json({ error: 'Day not found or does not belong to your roadmap' });
+      return;
+    }
+
+    const answersRes = await pool.query(
+      `SELECT id, day_id, question_id, answer_text, source, ai_score, ai_feedback, created_at
+       FROM practice_answers
+       WHERE user_id = $1 AND day_id = $2
+       ORDER BY created_at DESC`,
+      [userId, dayId]
+    );
+
+    res.json({ answers: answersRes.rows });
+  } catch (err) {
+    console.error('[roadmap] GET answers error:', err);
+    res.status(500).json({ error: 'Failed to fetch answers' });
   }
 });
 

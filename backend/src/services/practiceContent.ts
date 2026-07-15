@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { callGemini } from './ai/callClaude';
+import { callGemini } from './ai/callGemini';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

@@ -4,7 +4,7 @@ import { educationAgent } from './agents/educationAgent';
 import { cultureAgent } from './agents/cultureAgent';
 import { interviewAgent } from './agents/interviewAgent';
 import { narrativeAgent } from './agents/narrativeAgent';
-import { callGemini } from './callClaude';
+import { callGemini } from './callGemini';
 import type {
   ParsedResume,
   ParsedJD,

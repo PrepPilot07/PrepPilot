@@ -1,4 +1,4 @@
-import { callGemini } from '../callClaude';
+import { callGemini } from '../callGemini';
 import type { ParsedResume, ParsedJD, CultureFitResult } from '../types';
 
 const SYSTEM = `You are an organizational psychologist inferring soft skills and culture fit from a resume.

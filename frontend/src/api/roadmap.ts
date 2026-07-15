@@ -51,6 +51,17 @@ export interface CompleteDayResult {
   completed_count: number;
 }
 
+export interface PracticeAnswer {
+  id: string;
+  day_id: string;
+  question_id: string;
+  answer_text: string;
+  source: 'web' | 'whatsapp';
+  ai_score: number | null;
+  ai_feedback: string | null;
+  created_at: string;
+}
+
 // ── API call ───────────────────────────────────────────────────────────────────
 
 export async function fetchRoadmap(
@@ -86,6 +97,52 @@ export async function fetchPractice(
       return { status: res.status, error: (body as { error?: string }).error || 'Failed to load practice content' };
     }
     return { status: res.status, data: body as PracticeContent };
+  } catch {
+    return { status: 0, error: 'Network error — make sure the backend server is running.' };
+  }
+}
+
+export async function fetchDayAnswers(
+  token: string,
+  dayId: string
+): Promise<{ data?: PracticeAnswer[]; error?: string; status: number }> {
+  try {
+    const res = await fetch(`${API_BASE}/api/roadmap/${dayId}/answers`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { status: res.status, error: (body as { error?: string }).error || 'Failed to fetch answers' };
+    }
+    return { status: res.status, data: (body as { answers: PracticeAnswer[] }).answers };
+  } catch {
+    return { status: 0, error: 'Network error — make sure the backend server is running.' };
+  }
+}
+
+export async function submitAnswer(
+  token: string,
+  dayId: string,
+  questionId: string,
+  answerText: string
+): Promise<{ data?: PracticeAnswer; error?: string; status: number }> {
+  try {
+    const res = await fetch(
+      `${API_BASE}/api/roadmap/${dayId}/questions/${questionId}/answers`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ answer_text: answerText }),
+      }
+    );
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { status: res.status, error: (body as { error?: string }).error || 'Failed to submit answer' };
+    }
+    return { status: res.status, data: body as PracticeAnswer };
   } catch {
     return { status: 0, error: 'Network error — make sure the backend server is running.' };
   }
