@@ -9,7 +9,10 @@
     "start": "node dist/index.js",
     "migrate": "tsx src/db/migrate.ts",
     "migrate:upload": "tsx src/db/migrate-upload.ts",
-    "migrate:roadmap": "tsx src/db/run-migration.ts 003_roadmap_questions.sql"
+    "migrate:roadmap": "tsx src/db/run-migration.ts 003_roadmap_questions.sql",
+    "migrate:name": "tsx src/db/run-migration.ts 004_add_user_name.sql",
+    "migrate:responses": "tsx src/db/run-migration.ts 005_responses_practice.sql",
+    "migrate:day-status": "tsx src/db/run-migration.ts 006_roadmap_day_status.sql"
   },
   "keywords": [],
   "author": "",

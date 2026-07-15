@@ -1,116 +1,130 @@
-# PrepPilot 🎯
-
-> *An interview coach that texts you like a mentor would — one sharp question a day, honest feedback on your answer, and a readiness score that actually moves.*
-
----
-
-## The Problem
-
-Most interview prep fails — not because resources are scarce, but because **consistency is hard to maintain alone**. People binge LeetCode for a weekend, then go cold for two weeks. When the actual interview arrives, the preparation is stale and the confidence is hollow.
-
-PrepPilot fixes the consistency problem by making the coach come to *you*, through a channel you already check every day: **WhatsApp**.
+<div align="center">
+  <div style="background-color: #059669; color: white; width: 64px; height: 64px; border-radius: 16px; display: inline-flex; align-items: center; justify-content: center; font-size: 32px; font-weight: bold; margin-bottom: 16px;">
+    P
+  </div>
+  <h1 align="center">PrepPilot</h1>
+  <p align="center">
+    <strong>An AI-powered interview coach that builds personalized roadmaps and tests your readiness.</strong>
+  </p>
+</div>
 
 ---
 
-## What PrepPilot Does
+## 🎯 The Problem
 
-1. You upload your resume and the job description you're targeting.
-2. Claude parses both, identifies your skill gaps, and builds a personalised day-by-day prep roadmap.
-3. Every morning, PrepPilot sends you one sharp, targeted question over WhatsApp.
-4. You reply in plain English — no special format required.
-5. Claude evaluates your answer, scores it, and texts back honest feedback + the next focus topic.
-6. Your dashboard tracks a **Readiness Score** that moves as you actually practise.
+Most interview prep fails—not because resources are scarce, but because **consistency is hard to maintain alone**. People binge LeetCode for a weekend, then go cold for two weeks. When the actual interview arrives, the preparation is stale and the confidence is hollow.
+
+PrepPilot fixes the consistency problem by generating a highly personalized, day-by-day roadmap tailored exactly to your resume and target job description.
 
 ---
 
-## Tech Stack
+## ✨ What PrepPilot Does
+
+1. **Upload & Analyze:** You upload your resume and paste the job description you're targeting.
+2. **Multi-Agent Evaluation:** A swarm of AI agents (Skills, Experience, Education, Culture Fit) running on **Google Gemini 3.1 Flash Lite** analyze your profile in parallel.
+3. **Personalized Roadmap:** PrepPilot builds a 15-day roadmap identifying your exact skill gaps.
+4. **Daily Practice:** Every day, you receive targeted interview questions to tackle.
+5. **Real-time Tracking:** Your dashboard tracks a **Readiness Score** that moves as you actually practice.
+
+---
+
+## 🛠️ Tech Stack
+
+PrepPilot is built using a modern, scalable, microservice-inspired architecture.
 
 | Layer | Technology |
 |---|---|
-| **Frontend** | React + Vite + Tailwind CSS |
+| **Frontend UI** | React + Vite + Tailwind CSS |
 | **Backend API** | Node.js + Express + TypeScript |
+| **AI Engine** | Python + FastAPI + LangChain + Google Gemini |
 | **Database** | PostgreSQL |
-| **AI Layer** | Anthropic Claude API |
-| **Messaging** | Twilio WhatsApp Sandbox |
-| **Scheduler** | node-cron |
 
 ---
 
-## Running Locally
+## 🚀 Running Locally
+
+You will need to run three separate servers concurrently: the Node backend, the Python AI API, and the Vite frontend.
+
+### 1. Database Setup
+
+Ensure you have a PostgreSQL database running. You can use a local instance or a managed service like Supabase/Neon.
+
+### 2. Node Backend Setup
 
 ```bash
-# 1. Clone the repo
-git clone https://github.com/your-org/prep-pilot.git
-cd prep-pilot
-
-# 2. Set up backend environment
 cd backend
 cp ../.env.example .env
-# Edit .env and fill in:
-#   DATABASE_URL  — your PostgreSQL/Supabase connection string
-#   JWT_SECRET    — any random secret (use: openssl rand -base64 32)
-#   ANTHROPIC_API_KEY, TWILIO_* — filled in later phases
-
-# 3. Install backend dependencies
-npm install
-
-# 4. Run database migration (creates all tables)
-npm run migrate
-
-# 5. Start the backend dev server
-npm run dev
-# → API running at http://localhost:3000
-
-# 6. In a second terminal, start the frontend
-cd ../frontend
-npm install
-npm run dev
-# → Frontend running at http://localhost:5173 (or 5174 if port is busy)
 ```
 
-### Environment Variables Reference
+Edit the `.env` file in the `backend` folder:
+- `DATABASE_URL`: Your PostgreSQL connection string.
+- `JWT_SECRET`: A random secret (e.g., run `openssl rand -base64 32`).
 
-| Variable | Required | Description |
-|---|---|---|
-| `DATABASE_URL` | ✅ Phase 1 | PostgreSQL connection string (Supabase, Neon, local) |
-| `JWT_SECRET` | ✅ Phase 1 | Secret key for signing JWTs |
-| `PORT` | Optional | Backend port (default: 3000) |
-| `FRONTEND_ORIGIN` | Optional | CORS allowed origin (default: http://localhost:5173) |
-| `ANTHROPIC_API_KEY` | Phase 2 | Claude API key for AI parsing + scoring |
-| `TWILIO_ACCOUNT_SID` | Phase 3 | Twilio account SID for WhatsApp |
-| `TWILIO_AUTH_TOKEN` | Phase 3 | Twilio auth token |
-| `TWILIO_WHATSAPP_NUMBER` | Phase 3 | Twilio sandbox number (`whatsapp:+14155238886`) |
+Install dependencies and run migrations:
+```bash
+npm install
+npm run migrate             # Initial schema
+npm run migrate:name        # Add name column
+npm run migrate:responses   # Add responses table
+```
 
+Start the backend server (runs on port 3000):
+```bash
+npm run dev
+```
 
+### 3. Python AI Engine Setup
+
+In a **second terminal window**:
+
+```bash
+cd python-api
+python -m venv venv
+```
+
+Activate the virtual environment:
+- Windows: `.\venv\Scripts\activate`
+- Mac/Linux: `source venv/bin/activate`
+
+Install dependencies and start the FastAPI server:
+```bash
+pip install -r requirements.txt
+python -m uvicorn api_server:app --port 8001 --reload
+```
+*(Ensure you have your `GEMINI_API_KEY` set in your `.env` or system environment).*
+
+### 4. Frontend Setup
+
+In a **third terminal window**:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+Your application will now be running at `http://localhost:5173`.
 
 ---
 
-## Repository Structure
+## 📂 Repository Structure
 
-```
+```text
 prep-pilot/
-├── docs/               # Architecture, schema, wireframes, API contracts
-├── frontend/           # React + Vite + Tailwind app
-├── backend/            # Node + Express + TypeScript API
+├── backend/            # Node + Express + TypeScript API (Auth, DB, User Routes)
+├── frontend/           # React + Vite + Tailwind app (UI, Dashboard, Settings)
+├── python-api/         # FastAPI + LangChain engine (Multi-agent AI analysis)
+├── docs/               # Architecture and legacy documentation
 └── seed/               # Sample data scripts
 ```
 
 ---
 
-## Team
+## 👥 Team
 
-| Name | Role |
-|---|---|
-| **Srijan** | Backend, database design, authentication, deployment |
-| **Ranith** | AI layer — resume/JD parsing, gap analysis, scoring engine |
-| **Geetesh** | Frontend — upload flow, dashboard, wireframes & design |
+Built with ☕ and late nights for the hackathon by:
+- **Srijan** — Backend, database design, authentication, deployment
+- **Ranith** — AI layer (Python FastAPI), resume/JD parsing, gap analysis
+- **Geetesh** — Frontend, UI/UX, responsive design
 
----
-
-## Hackathon Context
-
-PrepPilot is being built as a hackathon submission. This repository represents **Milestone 1** — the documentation and architecture phase. Backend logic, AI integration, and frontend components are scoped for subsequent milestones.
-
----
-
-**Built with ☕ and late nights by Srijan, Ranith & Geetesh.**
+> [!NOTE]
+> PrepPilot is actively under development. This repository represents the completed integration of the Node Backend, React Frontend, and Python AI microservice.

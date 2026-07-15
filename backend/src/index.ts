@@ -5,6 +5,7 @@ import authRouter from './routes/auth';
 import profileRouter from './routes/profile';
 import uploadRouter from './routes/upload';
 import roadmapRouter from './routes/roadmap';
+import dashboardRouter from './routes/dashboard';
 
 dotenv.config();
 
@@ -35,6 +36,7 @@ app.use('/auth', authRouter);
 app.use('/profile', profileRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/roadmap', roadmapRouter);
+app.use('/api/dashboard', dashboardRouter);
 
 // ─── 404 catch-all ───────────────────────────────────────────────────────────
 
@@ -52,7 +54,9 @@ app.listen(PORT, () => {
   console.log(`   GET  /profile/me  (protected)`);
   console.log(`   POST /api/upload  (protected)`);
   console.log(`   GET  /api/upload  (protected)`);
-  console.log(`   GET  /api/roadmap (protected)\n`);
+  console.log(`   GET  /api/roadmap (protected)`);
+  console.log(`   GET  /api/dashboard (protected)`);
+  console.log(`   POST /api/dashboard/practice-answer (protected)\n`);
 });
 
 export default app;

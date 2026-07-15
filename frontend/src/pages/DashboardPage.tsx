@@ -1,320 +1,497 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
-import { authApi, UserProfile } from '../api/auth';
+import { fetchDashboard, submitPracticeAnswer, type DashboardData } from '../api/dashboard';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import {
+  Sparkles,
+  Target,
+  Calendar,
+  ArrowRight,
+  Send,
+  MessageCircle,
+  TrendingUp,
+  Flame,
+  BookOpen,
+  ChevronRight,
+} from 'lucide-react';
 
-// ── Icons ────────────────────────────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────────────────────
 
-function IconBrain() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
-      <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z" />
-      <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z" />
-    </svg>
-  );
+function getGreeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
 }
 
-function IconUpload() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-      <polyline points="17 8 12 3 7 8" />
-      <line x1="12" y1="3" x2="12" y2="15" />
-    </svg>
-  );
+function difficultyColor(d: string | null) {
+  switch (d) {
+    case 'easy': return 'bg-emerald-400';
+    case 'medium': return 'bg-amber-400';
+    case 'hard': return 'bg-rose-400';
+    default: return 'bg-gray-300';
+  }
 }
 
-function IconMap() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
-      <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21" />
-      <line x1="9" y1="3" x2="9" y2="18" />
-      <line x1="15" y1="6" x2="15" y2="21" />
-    </svg>
-  );
-}
+// ── Score Ring ───────────────────────────────────────────────────────────────
 
-function IconMessage() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </svg>
-  );
-}
+function ScoreRing({ score, size = 100 }: { score: number; size?: number }) {
+  const strokeWidth = 8;
+  const r = (size - strokeWidth * 2) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (Math.min(score, 100) / 100) * circ;
 
-function IconTarget() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-      <circle cx="12" cy="12" r="10" />
-      <circle cx="12" cy="12" r="6" />
-      <circle cx="12" cy="12" r="2" />
-    </svg>
-  );
-}
-
-function IconWhatsApp() {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-    </svg>
-  );
-}
-
-function IconChevronRight() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
-      <polyline points="9 18 15 12 9 6" />
-    </svg>
-  );
-}
-
-// ── Stat Card ────────────────────────────────────────────────────────────────
-
-function StatCard({ label, value, sub, color }: { label: string; value: string; sub: string; color: string }) {
-  return (
-    <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
-      <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">{label}</p>
-      <p className={`text-3xl font-bold mb-0.5 ${color}`}>{value}</p>
-      <p className="text-xs text-gray-500">{sub}</p>
+    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={r} stroke="#e5e7eb" strokeWidth={strokeWidth} fill="none" />
+        <circle
+          cx={size / 2} cy={size / 2} r={r}
+          stroke="url(#dashRingGrad)" strokeWidth={strokeWidth}
+          fill="none" strokeLinecap="round"
+          strokeDasharray={circ} strokeDashoffset={offset}
+          style={{ transition: 'stroke-dashoffset 1s ease' }}
+        />
+        <defs>
+          <linearGradient id="dashRingGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#059669" />
+            <stop offset="100%" stopColor="#10b981" />
+          </linearGradient>
+        </defs>
+      </svg>
+      <div className="absolute text-center">
+        <p className="text-2xl font-black text-gray-900">{score}</p>
+        <p className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wider">Ready</p>
+      </div>
     </div>
   );
 }
 
-// ── Step Card ────────────────────────────────────────────────────────────────
-
-function StepCard({
-  step,
-  icon,
-  title,
-  desc,
-  cta,
-  active,
-  done,
-  onCtaClick,
-}: {
-  step: number;
-  icon: React.ReactNode;
-  title: string;
-  desc: string;
-  cta: string;
-  active: boolean;
-  done: boolean;
-  onCtaClick?: () => void;
-}) {
-  return (
-    <div
-      className={`bg-white rounded-2xl border p-6 flex flex-col gap-4 transition-all duration-300 ${done
-          ? 'border-gray-200 opacity-60 bg-gray-50'
-          : active
-            ? 'border-violet-300 shadow-sm'
-            : 'border-gray-200 opacity-50'
-        }`}
-    >
-      <div className="flex items-start justify-between">
-        <div
-          className={`w-11 h-11 rounded-xl flex items-center justify-center ${done
-              ? 'bg-emerald-50 text-emerald-600'
-              : active
-                ? 'bg-violet-50 text-violet-600'
-                : 'bg-gray-100 text-gray-400'
-            }`}
-        >
-          {done ? (
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          ) : (
-            icon
-          )}
-        </div>
-        <span
-          className={`text-xs font-semibold px-2.5 py-1 rounded-full ${done
-              ? 'bg-emerald-50 text-emerald-600'
-              : active
-                ? 'bg-violet-50 text-violet-600'
-                : 'bg-gray-100 text-gray-500'
-            }`}
-        >
-          {done ? 'Done' : active ? 'Up next' : `Step ${step}`}
-        </span>
-      </div>
-
-      <div>
-        <h3 className="font-semibold text-gray-900 mb-1">{title}</h3>
-        <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
-      </div>
-
-      {active && (
-        <button
-          onClick={onCtaClick}
-          disabled={!onCtaClick}
-          className={`mt-auto flex items-center gap-2 text-sm font-medium transition-colors group ${onCtaClick
-              ? 'text-violet-600 hover:text-violet-700 cursor-pointer'
-              : 'text-gray-400 cursor-not-allowed'
-            }`}
-        >
-          {cta}
-          <IconChevronRight />
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ── Main Dashboard ───────────────────────────────────────────────────────────
+// ── Main Dashboard ──────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
-  const { token, user, logout } = useAuth();
+  const { token } = useAuth();
   const navigate = useNavigate();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [answerText, setAnswerText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [chatMessages, setChatMessages] = useState<{ from: 'bot' | 'user'; text: string }[]>([]);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!token) {
-      navigate('/login');
-      return;
-    }
-    authApi.getProfile(token).then(result => {
+    if (!token) { navigate('/login'); return; }
+    fetchDashboard(token).then(res => {
       setLoading(false);
-      if (!result.data) {
-        if (result.status === 401) {
-          logout();
-          navigate('/login');
+      if (res.data) {
+        setData(res.data);
+        if (res.data.today_question && !res.data.today_question.already_answered) {
+          setChatMessages([{ from: 'bot', text: res.data.today_question.question_text }]);
         }
-      } else {
-        setProfile(result.data);
       }
     });
-  }, [token, navigate, logout]);
+  }, [token, navigate]);
 
-  const firstName = user?.email?.split('@')[0] ?? 'there';
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  const handleSubmitAnswer = async () => {
+    if (!token || !data?.today_question || submitting || !answerText.trim()) return;
+    setSubmitting(true);
+    setChatMessages(prev => [...prev, { from: 'user', text: answerText.trim() }]);
+    const answer = answerText.trim();
+    setAnswerText('');
+
+    const res = await submitPracticeAnswer(token, data.today_question.id, answer);
+    setSubmitting(false);
+
+    if (res.data) {
+      setData(prev => prev ? {
+        ...prev,
+        readiness_score: res.data!.readiness_score,
+        sessions_this_week: res.data!.sessions_this_week,
+        today_question: res.data!.today_question,
+      } : prev);
+      setChatMessages(prev => [...prev, { from: 'bot', text: 'Answer recorded! Great work. Move on to your next question when ready.' }]);
+    }
+  };
 
   if (loading) {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center bg-transparent">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
-          <p className="text-sm text-gray-500">Loading your dashboard…</p>
+      <div className="min-h-[80vh] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
+          <p className="text-sm text-gray-500">Loading dashboard...</p>
         </div>
       </div>
     );
   }
 
+  if (!data) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center">
+        <p className="text-gray-500">Failed to load dashboard.</p>
+      </div>
+    );
+  }
+
+  const {
+    name, role_title, readiness_score, readiness_delta_week,
+    sessions_this_week, sessions_goal, days_until_interview,
+    today_question, whatsapp_connected, readiness_trend,
+    topic_confidence, streak_days, weekly_review_summary,
+  } = data;
+
+  const sessionsRemaining = Math.max(0, sessions_goal - sessions_this_week);
+
   return (
-    <div className="p-6 md:p-8 max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 pb-16 text-gray-900">
+    <div className="p-6 md:p-8 max-w-6xl mx-auto space-y-6 pb-16 animate-in fade-in duration-500">
 
-        {/* Hero greeting */}
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-          <div>
-            <p className="text-sm text-emerald-600 font-medium mb-1 uppercase tracking-widest">Dashboard</p>
-            <h1 className="text-3xl font-bold text-gray-900">
-              Hey, {firstName} 👋
-            </h1>
-            <p className="text-gray-500 mt-1.5 text-sm leading-relaxed max-w-md">
-              Your AI-powered interview coach. One sharp question a day, honest feedback, and a readiness score that actually moves.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-gray-600 bg-white border border-gray-200 shadow-sm rounded-xl px-4 py-2.5 self-start sm:self-auto">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Account active since {profile ? new Date(profile.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
-          </div>
-        </div>
-
-        {/* Stats row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard label="Questions Sent" value="0" sub="Starts after setup" color="text-gray-900" />
-          <StatCard label="Answers Reviewed" value="0" sub="Responses analysed" color="text-gray-900" />
-          <StatCard label="Readiness Score" value="—" sub="Unlocks after 3 days" color="text-emerald-600" />
-          <StatCard label="Days Until Ready" value="—" sub="Set your interview date" color="text-violet-600" />
-        </div>
-
-        {/* Setup journey */}
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3 mb-5">
-            <div className="flex items-center justify-center w-7 h-7 rounded-full bg-violet-50 text-violet-600">
-              <IconTarget />
-            </div>
-            <h2 className="font-semibold text-gray-900">Your Setup Journey</h2>
-            <div className="flex-1 h-px bg-gray-200" />
-            <span className="text-xs text-gray-500">1 of 4 complete</span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StepCard
-              step={1}
-              icon={<IconBrain />}
-              title="Create Account"
-              desc="Sign up and secure your PrepPilot account with email and password."
-              cta=""
-              active={false}
-              done={true}
-            />
-            <StepCard
-              step={2}
-              icon={<IconUpload />}
-              title="Upload Resume + JD"
-              desc="Drop in your CV and the job description. Claude will extract your skills and flag the gaps."
-              cta="View Analysis or Upload"
-              active={true}
-              done={false}
-              onCtaClick={() => navigate('/analysis')}
-            />
-            <StepCard
-              step={3}
-              icon={<IconMap />}
-              title="Review Your Roadmap"
-              desc="Get a personalised day-by-day prep plan tailored to your target role and timeline."
-              cta="View roadmap"
-              active={true}
-              done={false}
-              onCtaClick={() => navigate('/roadmap')}
-            />
-            <StepCard
-              step={4}
-              icon={<IconWhatsApp />}
-              title="Connect WhatsApp"
-              desc="Start receiving one targeted question every morning — straight to your phone."
-              cta="Connect WhatsApp"
-              active={false}
-              done={false}
-            />
-          </div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 mb-2">
+            Your Interview Prep
+          </p>
+          <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 flex items-center gap-2">
+            {getGreeting()}, {name}
+            <Sparkles size={20} className="text-emerald-500" />
+          </h1>
+          <p className="text-gray-500 text-sm mt-1">
+            {role_title
+              ? `Preparing for ${role_title}. Stay consistent, one day at a time.`
+              : 'Upload your resume and target role to start your prep journey.'}
+          </p>
         </div>
+        <button
+          onClick={() => navigate('/roadmap')}
+          className="self-start sm:self-auto flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold hover:bg-emerald-100 transition-colors"
+        >
+          View roadmap
+          <ArrowRight size={14} />
+        </button>
+      </div>
 
-        {/* Today's question placeholder */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
-            <IconMessage />
-          </div>
-          <div className="flex-1">
-            <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wider mb-1">Today's Question</p>
+      {/* ── Stat cards ──────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Readiness Score */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 flex items-center gap-5">
+          <ScoreRing score={readiness_score} />
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Readiness Score</p>
             <p className="text-sm text-gray-600">
-              Your daily question will appear here once you've uploaded your resume and connected WhatsApp. Complete the setup steps above to get started.
+              {readiness_delta_week > 0
+                ? <span className="text-emerald-600 font-semibold">+{readiness_delta_week} this week</span>
+                : readiness_delta_week === 0
+                  ? <span className="text-gray-500">No change this week</span>
+                  : <span className="text-red-500 font-semibold">{readiness_delta_week} this week</span>
+              }
             </p>
-          </div>
-          <div className="text-xs text-gray-500 bg-gray-100 rounded-xl px-3 py-2 whitespace-nowrap self-start sm:self-auto font-medium">
-            Not started
+            <p className="text-xs text-gray-400 mt-0.5">Based on analysis + practice</p>
           </div>
         </div>
 
-        {/* WhatsApp promo */}
-        <div className="rounded-2xl overflow-hidden border border-emerald-200 bg-emerald-50/50 p-6 flex flex-col sm:flex-row items-start sm:items-center gap-5">
+        {/* Practice This Week */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Target size={16} className="text-emerald-600" />
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Practice This Week</p>
+          </div>
+          <div className="flex items-end gap-2 mb-3">
+            <span className="text-3xl font-black text-gray-900">{sessions_this_week}</span>
+            <span className="text-lg text-gray-400 font-semibold mb-0.5">/ {sessions_goal}</span>
+          </div>
+          <div className="h-2 bg-gray-100 rounded-full overflow-hidden mb-2">
+            <div
+              className="h-full bg-emerald-500 rounded-full transition-all duration-700"
+              style={{ width: `${(sessions_this_week / sessions_goal) * 100}%` }}
+            />
+          </div>
+          <p className="text-xs text-gray-500">
+            {sessionsRemaining > 0
+              ? `${sessionsRemaining} session${sessionsRemaining > 1 ? 's' : ''} left to reach your goal`
+              : 'Weekly goal reached!'}
+          </p>
+        </div>
+
+        {/* Next Interview */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+          <div className="flex items-center gap-2 mb-3">
+            <Calendar size={16} className="text-violet-600" />
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Next Interview</p>
+          </div>
+          {days_until_interview !== null ? (
+            <>
+              <div className="flex items-end gap-2 mb-1">
+                <span className="text-3xl font-black text-gray-900">{days_until_interview}</span>
+                <span className="text-sm text-gray-500 mb-1 font-medium">days</span>
+              </div>
+              {role_title && <p className="text-xs text-gray-500 mb-3">{role_title}</p>}
+              <button
+                onClick={() => navigate('/roadmap')}
+                className="text-xs text-violet-600 font-semibold flex items-center gap-1 hover:text-violet-700 transition-colors"
+              >
+                Review your focus <ChevronRight size={12} />
+              </button>
+            </>
+          ) : (
+            <div>
+              <p className="text-sm text-gray-500 mb-2">No interview date set</p>
+              <button
+                onClick={() => navigate('/upload')}
+                className="text-xs text-violet-600 font-semibold flex items-center gap-1 hover:text-violet-700 transition-colors"
+              >
+                Set your interview date <ChevronRight size={12} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Today's coaching ────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Left: Question card */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+          <div className="flex items-center gap-2 mb-5">
+            <BookOpen size={16} className="text-emerald-600" />
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Today's Coaching</p>
+            {streak_days > 0 && (
+              <span className="ml-auto flex items-center gap-1 text-xs text-amber-600 font-semibold bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                <Flame size={12} /> {streak_days} day streak
+              </span>
+            )}
+          </div>
+
+          {today_question ? (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <span className={`w-2 h-2 rounded-full ${difficultyColor(today_question.difficulty)}`} />
+                <span className="text-xs text-gray-500 font-medium">Day {today_question.day_number} &middot; {today_question.topic}</span>
+                <span className="ml-auto text-[11px] text-gray-400">~10 min</span>
+              </div>
+              <p className="text-[15px] font-semibold text-gray-900 leading-relaxed mb-4">
+                {today_question.question_text}
+              </p>
+              {today_question.learning_goal && (
+                <>
+                  <div className="h-px bg-gray-100 mb-3" />
+                  <p className="text-xs text-gray-500">
+                    <span className="font-semibold text-gray-600">Today's goal:</span> {today_question.learning_goal}
+                  </p>
+                </>
+              )}
+              {today_question.already_answered && (
+                <div className="mt-4 flex items-center gap-2 text-xs text-emerald-600 font-semibold bg-emerald-50 px-3 py-2 rounded-lg border border-emerald-200">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  Completed
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-gray-500 text-sm mb-3">No coaching question available yet.</p>
+              <button
+                onClick={() => navigate('/upload')}
+                className="text-sm text-emerald-600 font-semibold hover:text-emerald-700 transition-colors"
+              >
+                Upload resume & JD to get started →
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Right: Chat/answer card */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-col overflow-hidden">
+          {/* Chat header */}
+          <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center">
+              <span className="text-white font-bold text-xs">P</span>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-gray-900">PrepPilot</p>
+              <p className="text-[11px] text-gray-400">Your interview coach</p>
+            </div>
+            {!whatsapp_connected && (
+              <button
+                onClick={() => navigate('/whatsapp')}
+                className="ml-auto text-[11px] text-emerald-600 font-semibold hover:text-emerald-700 flex items-center gap-1"
+              >
+                <MessageCircle size={12} /> Connect WhatsApp
+              </button>
+            )}
+          </div>
+
+          {/* Chat body */}
+          <div className="flex-1 px-5 py-4 space-y-3 overflow-y-auto max-h-[260px] min-h-[180px] bg-gray-50/50">
+            {chatMessages.length === 0 && (
+              <p className="text-xs text-gray-400 text-center pt-8">
+                {today_question ? 'Your question will appear here.' : 'Upload documents to receive daily coaching.'}
+              </p>
+            )}
+            {chatMessages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.from === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                  msg.from === 'user'
+                    ? 'bg-emerald-600 text-white rounded-br-md'
+                    : 'bg-white border border-gray-200 text-gray-800 rounded-bl-md shadow-sm'
+                }`}>
+                  {msg.text}
+                </div>
+              </div>
+            ))}
+            <div ref={chatEndRef} />
+          </div>
+
+          {/* Chat input */}
+          {today_question && !today_question.already_answered && (
+            <div className="px-4 py-3 border-t border-gray-100 flex items-center gap-2">
+              <input
+                type="text"
+                value={answerText}
+                onChange={e => setAnswerText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmitAnswer(); } }}
+                placeholder="Type a practice answer..."
+                className="flex-1 px-4 py-2.5 rounded-xl bg-gray-50 border border-gray-200 text-sm text-gray-900 placeholder-gray-400 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition-all"
+                disabled={submitting}
+              />
+              <button
+                onClick={handleSubmitAnswer}
+                disabled={submitting || !answerText.trim()}
+                className="w-9 h-9 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center text-white transition-colors shrink-0"
+              >
+                <Send size={15} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── Readiness Trend + Topic Confidence ──────────────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Readiness Trend Chart */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-2">
+              <TrendingUp size={16} className="text-emerald-600" />
+              <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Readiness Trend</p>
+            </div>
+            <div className="flex items-center gap-3 text-xs">
+              <span className="font-bold text-gray-900">{readiness_score}</span>
+              {readiness_delta_week !== 0 && (
+                <span className={`font-semibold ${readiness_delta_week > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                  {readiness_delta_week > 0 ? '+' : ''}{readiness_delta_week}
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="h-[160px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={readiness_trend} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="readinessGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#9ca3af' }} />
+                <YAxis domain={[0, 100]} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#9ca3af' }} />
+                <Tooltip
+                  contentStyle={{ borderRadius: '12px', border: '1px solid #e5e7eb', fontSize: '12px' }}
+                  labelStyle={{ fontWeight: 600 }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="score"
+                  stroke="#10b981"
+                  strokeWidth={2.5}
+                  fill="url(#readinessGrad)"
+                  dot={false}
+                  activeDot={{ r: 4, fill: '#059669', stroke: '#fff', strokeWidth: 2 }}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Topic Confidence */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+          <div className="flex items-center gap-2 mb-5">
+            <Target size={16} className="text-violet-600" />
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Topic Confidence</p>
+          </div>
+          {topic_confidence.length > 0 ? (
+            <div className="space-y-3.5">
+              {topic_confidence.map((tc, i) => {
+                const colors = ['bg-emerald-500', 'bg-teal-500', 'bg-violet-500', 'bg-blue-500', 'bg-amber-500', 'bg-rose-500'];
+                const color = colors[i % colors.length];
+                return (
+                  <div key={tc.topic} className="flex items-center gap-3">
+                    <span className={`w-2 h-2 rounded-full ${color} shrink-0`} />
+                    <span className="text-sm text-gray-700 flex-1 truncate">{tc.topic}</span>
+                    <span className="text-xs font-semibold text-gray-900 w-8 text-right">{tc.percent}%</span>
+                    <div className="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden shrink-0">
+                      <div className={`h-full rounded-full ${color}`} style={{ width: `${tc.percent}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500 py-4 text-center">Upload your resume to see topic analysis.</p>
+          )}
+          {topic_confidence.length > 0 && (
+            <button
+              onClick={() => navigate('/roadmap')}
+              className="mt-5 text-xs text-emerald-600 font-semibold flex items-center gap-1 hover:text-emerald-700 transition-colors"
+            >
+              See your complete roadmap <ChevronRight size={12} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Bottom row ──────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Weekly Review */}
+        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles size={16} className="text-emerald-600" />
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Weekly Review</p>
+          </div>
+          <p className="text-sm text-gray-700 leading-relaxed mb-4">
+            {weekly_review_summary}
+          </p>
+          <button
+            onClick={() => navigate('/analysis')}
+            className="text-xs text-emerald-600 font-semibold flex items-center gap-1 hover:text-emerald-700 transition-colors"
+          >
+            View report <ChevronRight size={12} />
+          </button>
+        </div>
+
+        {/* WhatsApp card */}
+        <div className="bg-emerald-50/70 rounded-2xl border border-emerald-200 p-6 flex items-center gap-5">
           <div className="w-12 h-12 rounded-2xl bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-600 shrink-0">
-            <IconWhatsApp />
+            <MessageCircle size={22} />
           </div>
           <div className="flex-1">
-            <h3 className="font-semibold text-gray-900 mb-1">Coaching over WhatsApp</h3>
-            <p className="text-sm text-gray-600 leading-relaxed">
-              PrepPilot texts you like a mentor — one sharp question every morning, honest feedback on your answer, and a readiness score that moves as you improve.
+            <h3 className="font-semibold text-gray-900 text-sm mb-1">Keep coaching in WhatsApp</h3>
+            <p className="text-xs text-gray-600 leading-relaxed">
+              Get your daily question delivered every morning. Reply with your answer — no app needed.
             </p>
           </div>
           <button
-            disabled
-            className="shrink-0 px-4 py-2.5 rounded-xl bg-emerald-100 border border-emerald-200 text-emerald-700 text-sm font-semibold cursor-not-allowed opacity-60"
+            onClick={() => navigate('/whatsapp')}
+            className="shrink-0 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition-colors shadow-sm"
           >
-            Coming soon
+            {whatsapp_connected ? 'Manage' : 'Connect'}
           </button>
         </div>
+      </div>
     </div>
   );
 }

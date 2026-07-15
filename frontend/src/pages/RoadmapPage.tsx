@@ -1,8 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
-import { fetchRoadmap, RoadmapDay, RoadmapResponse } from '../api/roadmap';
-import { ChevronRight, RefreshCw, Upload } from 'lucide-react';
+import {
+  fetchRoadmap,
+  RoadmapDay,
+  RoadmapResponse,
+  CompleteDayResult,
+} from '../api/roadmap';
+import { ChevronRight, RefreshCw, Upload, Check, Lock } from 'lucide-react';
+import PracticeModal from '../components/PracticeModal';
 
 // ── Skeleton card ─────────────────────────────────────────────────────────────
 
@@ -39,25 +45,30 @@ function DifficultyDot({ difficulty }: { difficulty: RoadmapDay['difficulty'] })
 function DayCard({
   day,
   index,
-  isToday,
   isNext,
   totalDays,
+  onPractice,
 }: {
   day: RoadmapDay;
   index: number;
-  isToday: boolean;
   isNext: boolean;
   totalDays: number;
+  onPractice: (day: RoadmapDay) => void;
 }) {
-  const navigate = useNavigate();
   const isLast = index === totalDays - 1;
+  const isToday = day.status === 'today';
+  const isCompleted = day.status === 'completed';
 
   return (
     <div className="flex gap-4">
       {/* Timeline column */}
       <div className="flex flex-col items-center w-10 shrink-0">
         {/* Circle marker */}
-        {isToday ? (
+        {isCompleted ? (
+          <div className="w-9 h-9 rounded-full bg-emerald-500 flex items-center justify-center z-10">
+            <Check size={16} className="text-white" strokeWidth={3} />
+          </div>
+        ) : isToday ? (
           <div className="w-9 h-9 rounded-full bg-emerald-600 flex items-center justify-center shadow-md shadow-emerald-200 z-10">
             <div className="w-3 h-3 rounded-full bg-white" />
           </div>
@@ -79,10 +90,25 @@ function DayCard({
 
       {/* Card */}
       <div
-        className={`flex-1 bg-white rounded-2xl border p-5 mb-4 transition-shadow hover:shadow-sm ${
-          isToday
-            ? 'border-emerald-200 shadow-sm'
-            : 'border-gray-200'
+        onClick={isCompleted ? () => onPractice(day) : undefined}
+        role={isCompleted ? 'button' : undefined}
+        tabIndex={isCompleted ? 0 : undefined}
+        onKeyDown={
+          isCompleted
+            ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onPractice(day);
+                }
+              }
+            : undefined
+        }
+        className={`flex-1 rounded-2xl border p-5 mb-4 transition-shadow hover:shadow-sm ${
+          isCompleted
+            ? 'border-gray-100 bg-gray-50/70 cursor-pointer hover:border-emerald-200'
+            : isToday
+            ? 'border-emerald-200 bg-white shadow-sm'
+            : 'border-gray-200 bg-white'
         }`}
       >
         <div className="flex items-start gap-3">
@@ -92,14 +118,17 @@ function DayCard({
               <DifficultyDot difficulty={day.difficulty} />
               <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
                 Day {day.day_number}
-                {isToday && (
-                  <span className="text-emerald-600 ml-1">· Today</span>
-                )}
+                {isToday && <span className="text-emerald-600 ml-1">· Today</span>}
+                {isCompleted && <span className="text-emerald-500 ml-1">· Done</span>}
               </span>
             </div>
 
             {/* Topic title */}
-            <h3 className="font-semibold text-gray-900 text-[15px] leading-snug mb-1">
+            <h3
+              className={`font-semibold text-[15px] leading-snug mb-1 ${
+                isCompleted ? 'text-gray-500' : 'text-gray-900'
+              }`}
+            >
               {day.topic}
             </h3>
 
@@ -120,17 +149,29 @@ function DayCard({
 
           {/* Status / CTA */}
           <div className="shrink-0 self-center ml-2">
-            {isToday ? (
+            {isCompleted ? (
+              <div className="flex flex-col items-end gap-1.5">
+                <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-600 text-xs font-semibold rounded-full">
+                  <Check size={13} strokeWidth={3} />
+                  Completed
+                </span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPractice(day);
+                  }}
+                  className="flex items-center gap-0.5 text-xs font-semibold text-emerald-600 hover:text-emerald-700 transition-colors"
+                >
+                  Revisit
+                  <ChevronRight size={13} />
+                </button>
+              </div>
+            ) : isToday ? (
               <button
-                onClick={() => {
-                  // TODO: navigate to daily answering flow when built
-                  // navigate(`/roadmap/day/${day.day_number}`);
-                  console.log('[RoadmapPage] Start today clicked — daily flow not yet built.');
-                  navigate(`/roadmap/day/${day.day_number}`);
-                }}
+                onClick={() => onPractice(day)}
                 className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-sm shadow-emerald-200"
               >
-                Start today
+                Practice Here
                 <ChevronRight size={14} />
               </button>
             ) : isNext ? (
@@ -138,7 +179,8 @@ function DayCard({
                 Up next
               </span>
             ) : (
-              <span className="inline-flex items-center px-3 py-1.5 bg-gray-100 text-gray-400 text-xs font-medium rounded-full">
+              <span className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 text-gray-400 text-xs font-medium rounded-full">
+                <Lock size={11} />
                 Locked
               </span>
             )}
@@ -226,6 +268,7 @@ export default function RoadmapPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [practiceDay, setPracticeDay] = useState<RoadmapDay | null>(null);
 
   const loadRoadmap = async () => {
     if (!token) {
@@ -251,6 +294,24 @@ export default function RoadmapPage() {
   useEffect(() => {
     loadRoadmap();
   }, [token]);
+
+  // Apply a completion result to local state so the completed day + newly
+  // unlocked day re-render immediately (no full refetch, no page reload).
+  const handleCompleted = (result: CompleteDayResult) => {
+    setRoadmap((prev) => {
+      if (!prev) return prev;
+      const days = prev.days.map((d) => {
+        if (d.id === result.day.id) {
+          return { ...d, status: result.day.status, completed_at: result.day.completed_at };
+        }
+        if (result.next_day && d.id === result.next_day.id) {
+          return { ...d, status: result.next_day.status };
+        }
+        return d;
+      });
+      return { ...prev, days, completed_count: result.completed_count };
+    });
+  };
 
   // Derive role title from first day's focus for fallback
   const roleTitle = null; // Would come from stored JD; using null triggers fallback
@@ -323,10 +384,13 @@ export default function RoadmapPage() {
 
   // ── Loaded state ────────────────────────────────────────────────────────────
 
-  const { days, completed_count } = roadmap;
+  const { days } = roadmap;
   const totalDays = days.length;
-  const todayIndex = completed_count; // Day after last completed = today (0-indexed)
-  const nextIndex = todayIndex + 1;
+  // Progress driven by actual per-day status, not a static count.
+  const completedCount = days.filter((d) => d.status === 'completed').length;
+  // The "Up next" pill is the locked day immediately after the active day.
+  const todayDay = days.find((d) => d.status === 'today');
+  const nextDayNumber = todayDay ? todayDay.day_number + 1 : null;
 
   // Derive role title for headline (fallback copy)
   const headlineRole = roleTitle ?? 'the role you want next';
@@ -352,7 +416,7 @@ export default function RoadmapPage() {
 
         {/* Progress card — top right */}
         <div className="w-52 shrink-0">
-          <ProgressCard completed={completed_count} total={totalDays} />
+          <ProgressCard completed={completedCount} total={totalDays} />
         </div>
       </div>
 
@@ -370,9 +434,9 @@ export default function RoadmapPage() {
               key={day.id || day.day_number}
               day={day}
               index={i}
-              isToday={i === todayIndex}
-              isNext={i === nextIndex}
+              isNext={day.status === 'locked' && day.day_number === nextDayNumber}
               totalDays={totalDays}
+              onPractice={setPracticeDay}
             />
           ))}
         </div>
@@ -380,6 +444,18 @@ export default function RoadmapPage() {
 
       {/* ── Bottom spacer ──────────────────────────────────────────────────── */}
       <div className="h-10" />
+
+      {/* ── Practice / revisit modal ───────────────────────────────────────── */}
+      {practiceDay && (
+        <PracticeModal
+          dayId={practiceDay.id}
+          dayNumber={practiceDay.day_number}
+          topic={practiceDay.topic}
+          completed={practiceDay.status === 'completed'}
+          onClose={() => setPracticeDay(null)}
+          onCompleted={handleCompleted}
+        />
+      )}
     </div>
   );
 }

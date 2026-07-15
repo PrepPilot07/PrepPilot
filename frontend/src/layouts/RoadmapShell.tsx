@@ -1,5 +1,7 @@
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../store/AuthContext';
+import { fetchProfile } from '../api/profile';
 import {
   LayoutGrid,
   Map,
@@ -7,7 +9,7 @@ import {
   Plus,
   Bell,
   Settings,
-  X,
+  LogOut,
   Flame,
   FileText,
 } from 'lucide-react';
@@ -46,14 +48,23 @@ function NavItem({
 // ── Main layout ───────────────────────────────────────────────────────────────
 
 export default function RoadmapShell() {
-  const { user } = useAuth();
+  const { user, token, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const currentPath = location.pathname;
+  const [roleTitle, setRoleTitle] = useState<string | null>(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  useEffect(() => {
+    if (!token) return;
+    fetchProfile(token).then(res => {
+      if (res.data?.roleTitle) setRoleTitle(res.data.roleTitle);
+    });
+  }, [token]);
 
   // Derive user display info
-  const email = user?.email ?? 'user@example.com';
-  const namePart = email.split('@')[0];
-  const displayName = namePart.charAt(0).toUpperCase() + namePart.slice(1);
-  const initials = displayName.slice(0, 2).toUpperCase();
+  const displayName = user?.name || user?.email?.split('@')[0] || 'User';
+  const initials = displayName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 
   // Today's date in long format
   const today = new Date().toLocaleDateString('en-GB', {
@@ -85,31 +96,32 @@ export default function RoadmapShell() {
 
           <NavItem
             icon={<LayoutGrid size={16} />}
-            label="Overview"
+            label="Dashboard"
+            active={currentPath === '/dashboard'}
             onClick={() => navigate('/dashboard')}
           />
           <NavItem
             icon={<FileText size={16} />}
             label="Analysis"
+            active={currentPath === '/analysis'}
             onClick={() => navigate('/analysis')}
           />
           <NavItem
             icon={<Map size={16} />}
             label="Roadmap"
-            active={true}
+            active={currentPath === '/roadmap'}
             onClick={() => navigate('/roadmap')}
           />
           <NavItem
             icon={<MessageSquare size={16} />}
             label="WhatsApp"
           />
-          <button
+          <NavItem
+            icon={<Plus size={16} />}
+            label="New plan"
+            active={currentPath === '/upload'}
             onClick={() => navigate('/upload')}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-all duration-150 mt-1"
-          >
-            <Plus size={16} className="text-gray-400" />
-            New plan
-          </button>
+          />
         </nav>
 
         {/* Streak nudge card */}
@@ -125,27 +137,57 @@ export default function RoadmapShell() {
 
         {/* Settings */}
         <div className="px-3 pb-2">
-          <NavItem icon={<Settings size={16} />} label="Settings" />
+          <NavItem
+            icon={<Settings size={16} />}
+            label="Settings"
+            active={currentPath === '/settings'}
+            onClick={() => navigate('/settings')}
+          />
         </div>
 
         {/* User row */}
-        <div className="px-3 pb-4 border-t border-gray-100 pt-3">
+        <div className="px-3 pb-4 border-t border-gray-100 pt-3 relative">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center shrink-0">
-              <span className="text-white text-xs font-semibold">{initials}</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold text-gray-800 truncate">{displayName}</p>
-              <p className="text-[11px] text-gray-400 truncate">Interview candidate</p>
-            </div>
             <button
-              onClick={() => navigate('/dashboard')}
-              className="text-gray-400 hover:text-gray-600 transition-colors p-0.5"
-              title="Back to dashboard"
+              onClick={() => navigate('/settings')}
+              className="w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center shrink-0 hover:bg-emerald-700 transition-colors"
+              title="Settings"
             >
-              <X size={14} />
+              <span className="text-white text-xs font-semibold">{initials}</span>
+            </button>
+            <button onClick={() => navigate('/settings')} className="flex-1 min-w-0 text-left">
+              <p className="text-[13px] font-semibold text-gray-800 truncate">{displayName}</p>
+              <p className="text-[11px] text-gray-400 truncate">{roleTitle || 'Interview candidate'}</p>
+            </button>
+            <button
+              onClick={() => setShowLogoutConfirm(true)}
+              className="text-gray-400 hover:text-red-500 transition-colors p-0.5"
+              title="Logout"
+            >
+              <LogOut size={14} />
             </button>
           </div>
+
+          {/* Logout confirm popover */}
+          {showLogoutConfirm && (
+            <div className="absolute bottom-full left-3 right-3 mb-2 p-3 bg-white rounded-xl border border-gray-200 shadow-lg z-50">
+              <p className="text-xs text-gray-600 mb-2.5">Are you sure you want to log out?</p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { logout(); navigate('/login'); }}
+                  className="flex-1 px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  Log out
+                </button>
+                <button
+                  onClick={() => setShowLogoutConfirm(false)}
+                  className="flex-1 px-3 py-1.5 text-gray-600 text-xs font-medium rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -156,7 +198,9 @@ export default function RoadmapShell() {
         <header className="h-[58px] shrink-0 bg-white border-b border-gray-200 flex items-center justify-between px-6">
           {/* Breadcrumb */}
           <div className="flex items-center gap-1.5 text-sm text-gray-500">
-            <span className="font-medium text-gray-800">Your roadmap</span>
+            <span className="font-medium text-gray-800">
+              {currentPath === '/dashboard' ? 'Dashboard' : currentPath === '/analysis' ? 'Analysis Report' : currentPath === '/upload' ? 'New Plan' : currentPath === '/settings' ? 'Settings' : 'Your Roadmap'}
+            </span>
             <span className="text-gray-300">|</span>
             <span>{today}</span>
           </div>

@@ -10,12 +10,13 @@ async function apiFetch<T>(
   path: string,
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
+  const { headers, ...restOptions } = options;
   const res = await fetch(`${API_BASE}${path}`, {
+    ...restOptions,
     headers: {
       'Content-Type': 'application/json',
-      ...options.headers,
+      ...headers,
     },
-    ...options,
   });
 
   const body = await res.json().catch(() => ({}));
@@ -29,21 +30,22 @@ async function apiFetch<T>(
 
 export interface AuthPayload {
   token: string;
-  user: { id: string; email: string };
+  user: { id: string; email: string; name: string | null };
 }
 
 export interface UserProfile {
   id: string;
   email: string;
+  name: string | null;
   whatsappNumber: string | null;
   createdAt: string;
 }
 
 export const authApi = {
-  signup: (email: string, password: string) =>
+  signup: (email: string, password: string, name: string) =>
     apiFetch<AuthPayload>('/auth/signup', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, name }),
     }),
 
   login: (email: string, password: string) =>

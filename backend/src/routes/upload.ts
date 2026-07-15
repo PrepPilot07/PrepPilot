@@ -158,10 +158,14 @@ router.post(
         // Delete old questions for this roadmap, then bulk-insert new ones
         await pool.query(`DELETE FROM questions WHERE roadmap_id = $1`, [roadmapId]);
 
+        // The earliest day starts as the active ('today') day; the rest are locked
+        // until the user completes each one in turn.
+        const minDayNumber = Math.min(...roadmapData.days.map((d) => d.day_number));
+
         for (const day of roadmapData.days) {
           await pool.query(
-            `INSERT INTO questions (roadmap_id, day_number, topic, question_text, learning_goal, difficulty, focus_skill)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            `INSERT INTO questions (roadmap_id, day_number, topic, question_text, learning_goal, difficulty, focus_skill, status)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
             [
               roadmapId,
               day.day_number,
@@ -170,6 +174,7 @@ router.post(
               day.learning_goal ?? null,
               day.difficulty ?? null,
               day.focus_skill ?? null,
+              day.day_number === minDayNumber ? 'today' : 'locked',
             ]
           );
         }

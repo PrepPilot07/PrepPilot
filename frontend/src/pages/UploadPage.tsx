@@ -86,14 +86,14 @@ function formatBytes(bytes: number): string {
 
 function SkillPill({ skill }: { skill: string }) {
   return (
-    <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-emerald-50
-      border border-emerald-200 text-emerald-700 text-xs font-medium">
+    <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium">
       {skill}
     </span>
   );
 }
 
 function ResultCard({ result }: { result: UploadResult }) {
+  const navigate = useNavigate();
   const { resume, jd } = result;
   const topSkills = resume.skills.slice(0, 10);
   const reqSkills = jd.required_skills.slice(0, 8);
@@ -104,10 +104,8 @@ function ResultCard({ result }: { result: UploadResult }) {
   return (
     <div className="space-y-4 animate-[fadeIn_0.4s_ease]">
       {/* Success banner */}
-      <div className="flex items-center gap-3 px-5 py-4 rounded-2xl
-        bg-emerald-50 border border-emerald-200 shadow-sm">
-        <div className="w-8 h-8 rounded-full bg-emerald-100 border border-emerald-200
-          flex items-center justify-center text-emerald-600 shrink-0">
+      <div className="flex items-center gap-3 px-5 py-4 rounded-2xl bg-emerald-50 border border-emerald-200 shadow-sm">
+        <div className="w-8 h-8 rounded-full bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-600 shrink-0">
           <IconCheck />
         </div>
         <div>
@@ -123,12 +121,11 @@ function ResultCard({ result }: { result: UploadResult }) {
         {/* Resume card */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-violet-50 border border-violet-200
-              flex items-center justify-center text-violet-600">
+            <div className="w-9 h-9 rounded-xl bg-violet-50 border border-violet-200 flex items-center justify-center text-violet-600">
               <IconFile />
             </div>
             <div>
-              <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Resume</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Resume</p>
               <p className="font-semibold text-gray-900 text-sm">{resume.name || 'Candidate'}</p>
             </div>
           </div>
@@ -148,7 +145,7 @@ function ResultCard({ result }: { result: UploadResult }) {
 
           {topSkills.length > 0 && (
             <div>
-              <p className="text-xs text-gray-500 font-medium mb-2 uppercase tracking-wider">Top skills</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-2">Top skills</p>
               <div className="flex flex-wrap gap-1.5">
                 {topSkills.map(s => <SkillPill key={s} skill={s} />)}
                 {resume.skills.length > 10 && (
@@ -164,12 +161,11 @@ function ResultCard({ result }: { result: UploadResult }) {
         {/* JD card */}
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 space-y-4">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200
-              flex items-center justify-center text-indigo-600">
+            <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600">
               <IconBriefcase />
             </div>
             <div>
-              <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Target Role</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Target Role</p>
               <p className="font-semibold text-gray-900 text-sm leading-tight">
                 {jd.role_title || 'Role'}
               </p>
@@ -190,15 +186,15 @@ function ResultCard({ result }: { result: UploadResult }) {
 
           {reqSkills.length > 0 && (
             <div>
-              <p className="text-xs text-gray-500 font-medium mb-2 uppercase tracking-wider">Must-have skills</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-2">Must-have skills</p>
               <div className="flex flex-wrap gap-1.5">
                 {reqSkills.map(s => (
                   <span key={s}
-                    className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border
-                      ${matchedSkills.map(m => m.toLowerCase()).includes(s.toLowerCase())
+                    className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border ${
+                      matchedSkills.map(m => m.toLowerCase()).includes(s.toLowerCase())
                         ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
                         : 'bg-gray-50 border-gray-200 text-gray-600'
-                      }`}>
+                    }`}>
                     {s}
                   </span>
                 ))}
@@ -211,11 +207,10 @@ function ResultCard({ result }: { result: UploadResult }) {
       {/* Experience summary */}
       {resume.experience.length > 0 && (
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5">
-          <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-3">Experience</p>
+          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-3">Experience</p>
           <div className="space-y-2">
             {resume.experience.slice(0, 3).map((exp, i) => (
-              <div key={i} className="flex items-center justify-between py-2
-                border-b border-gray-100 last:border-0">
+              <div key={i} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
                 <div>
                   <p className="text-sm font-semibold text-gray-900">{exp.role}</p>
                   <p className="text-xs text-gray-500">{exp.company}</p>
@@ -229,17 +224,24 @@ function ResultCard({ result }: { result: UploadResult }) {
         </div>
       )}
 
-      {/* CTA */}
-      <button
-        disabled
-        className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl
-          bg-gray-100 border border-gray-200 text-gray-400
-          text-sm font-semibold cursor-not-allowed"
-        title="Coming in the next milestone"
-      >
-        Continue to Your Roadmap →
-        <span className="text-xs font-normal ml-1 text-gray-500">(Coming soon)</span>
-      </button>
+      {/* CTAs */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <button
+          onClick={() => navigate('/analysis')}
+          className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-colors shadow-sm"
+        >
+          View Full Report
+          <IconArrowRight />
+        </button>
+        <button
+          onClick={() => {
+            window.location.reload();
+          }}
+          className="flex-1 flex items-center justify-center gap-2 py-3.5 rounded-2xl bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm font-semibold transition-colors"
+        >
+          Analyse New Resume
+        </button>
+      </div>
     </div>
   );
 }
@@ -304,227 +306,201 @@ export default function UploadPage() {
   const canSubmit = !!resumeFile && jdText.trim().length > 20 && status !== 'loading';
 
   return (
-    <div className="p-6 md:p-8 max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500 pb-16 text-gray-900">
+    <div className="p-6 md:p-8 max-w-4xl mx-auto space-y-7 animate-in fade-in duration-500 pb-16">
 
-        {/* Header */}
-        <div>
-          <div className="inline-flex items-center gap-2 text-xs font-semibold
-            text-violet-600 uppercase tracking-widest mb-3
-            bg-violet-50 border border-violet-200 px-3 py-1.5 rounded-full">
-            <span className="w-1.5 h-1.5 rounded-full bg-violet-400" />
-            Step 2 of 4
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Upload Your Documents</h1>
-          <p className="text-gray-500 text-sm leading-relaxed max-w-lg">
-            Drop in your resume and paste the job description.
-            Our AI will extract your skills and identify exactly what to work on.
-          </p>
-        </div>
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      <div>
+        <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight mb-2">Upload Your Documents</h1>
+        <p className="text-gray-500 text-sm leading-relaxed max-w-lg">
+          Drop in your resume and paste the job description.
+          Our AI will extract your skills and identify exactly what to work on.
+        </p>
+      </div>
 
-        {/* Show result or upload form */}
-        {status === 'success' && result ? (
-          <ResultCard result={result} />
-        ) : (
-          <>
-            {/* Upload panels */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+      {/* ── Show result or upload form ──────────────────────────────────────── */}
+      {status === 'success' && result ? (
+        <ResultCard result={result} />
+      ) : (
+        <>
+          {/* Upload panels */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
-              {/* ── Left: Resume Drop Zone ─────────────────────────────── */}
-              <div className="flex flex-col gap-3">
-                <label className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                  <span className="w-5 h-5 rounded-md bg-violet-100 border
-                    border-violet-200 flex items-center justify-center
-                    text-violet-700 text-xs font-bold">1</span>
-                  Resume
-                  <span className="text-xs font-normal text-gray-500">PDF or DOCX · max 10 MB</span>
-                </label>
+            {/* ── Left: Resume Drop Zone ───────────────────────────────────── */}
+            <div className="flex flex-col gap-3">
+              <label className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-md bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-700 text-xs font-bold">1</span>
+                Resume
+                <span className="text-xs font-normal text-gray-400">PDF or DOCX &middot; max 10 MB</span>
+              </label>
 
-                {resumeFile ? (
-                  /* Selected file display */
-                  <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-violet-50
-                      border border-violet-200 flex items-center
-                      justify-center text-violet-600 shrink-0">
-                      <IconFile />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">
-                        {resumeFile.name}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {formatBytes(resumeFile.size)}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setResumeFile(null)}
-                      className="w-7 h-7 rounded-lg bg-gray-50 hover:bg-rose-50
-                        border border-gray-200 hover:border-rose-200
-                        flex items-center justify-center text-gray-500
-                        hover:text-rose-500 transition-all shrink-0"
-                    >
-                      <IconX />
-                    </button>
+              {resumeFile ? (
+                /* Selected file display */
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-5 flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shrink-0">
+                    <IconFile />
                   </div>
-                ) : (
-                  /* Drop zone */
-                  <div
-                    id="resume-drop-zone"
-                    className={`bg-white rounded-2xl border flex flex-col items-center justify-center
-                      gap-4 py-12 px-6 cursor-pointer transition-all duration-300 shadow-sm
-                      ${isDragging
-                        ? 'border-violet-400 bg-violet-50'
-                        : 'border-gray-200 hover:border-violet-300 hover:bg-gray-50 border-dashed'
-                      }`}
-                    onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
-                    onDragLeave={() => setIsDragging(false)}
-                    onDrop={handleDrop}
-                    onClick={() => fileInputRef.current?.click()}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">
+                      {resumeFile.name}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {formatBytes(resumeFile.size)}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setResumeFile(null)}
+                    className="w-7 h-7 rounded-lg bg-gray-50 hover:bg-rose-50 border border-gray-200 hover:border-rose-200 flex items-center justify-center text-gray-400 hover:text-rose-500 transition-all shrink-0"
                   >
-                    <div className={`w-14 h-14 rounded-2xl flex items-center
-                      justify-center transition-colors duration-300
-                      ${isDragging
-                        ? 'bg-violet-100 border border-violet-200 text-violet-600'
-                        : 'bg-gray-100 border border-gray-200 text-gray-400'
-                      }`}>
-                      <IconUpload />
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm font-semibold text-gray-900">
-                        {isDragging ? 'Drop your resume here' : 'Drag & drop your resume'}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        or{' '}
-                        <span className="text-violet-600 hover:text-violet-700
-                          transition-colors font-medium">
-                          click to browse
-                        </span>
-                      </p>
-                    </div>
-                    <input
-                      ref={fileInputRef}
-                      id="resume-file-input"
-                      type="file"
-                      className="hidden"
-                      accept=".pdf,.docx,.doc"
-                      onChange={e => {
-                        const f = e.target.files?.[0];
-                        if (f) handleFileSelect(f);
-                        e.target.value = '';
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* ── Right: JD textarea ────────────────────────────────── */}
-              <div className="flex flex-col gap-3">
-                <label
-                  htmlFor="jd-textarea"
-                  className="text-sm font-semibold text-gray-900 flex items-center gap-2"
+                    <IconX />
+                  </button>
+                </div>
+              ) : (
+                /* Drop zone */
+                <div
+                  id="resume-drop-zone"
+                  className={`bg-white rounded-2xl border flex flex-col items-center justify-center gap-4 py-14 px-6 cursor-pointer transition-all duration-300 ${
+                    isDragging
+                      ? 'border-emerald-400 bg-emerald-50 shadow-sm'
+                      : 'border-gray-200 border-dashed hover:border-emerald-300 hover:bg-gray-50'
+                  }`}
+                  onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
                 >
-                  <span className="w-5 h-5 rounded-md bg-indigo-100 border
-                    border-indigo-200 flex items-center justify-center
-                    text-indigo-700 text-xs font-bold">2</span>
-                  Job Description
-                  <span className="text-xs font-normal text-gray-500">paste the full JD</span>
-                </label>
-
-                <textarea
-                  id="jd-textarea"
-                  value={jdText}
-                  onChange={e => setJdText(e.target.value)}
-                  placeholder="Paste the full job description here…&#10;&#10;Include the role title, responsibilities, required skills, and any other details."
-                  className="flex-1 min-h-[240px] w-full px-4 py-3.5 rounded-2xl
-                    bg-white border border-gray-200 shadow-sm
-                    text-sm text-gray-900 placeholder:text-gray-400
-                    focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100
-                    transition-all duration-300 resize-none
-                    scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-200"
-                />
-
-                {jdText.length > 0 && (
-                  <p className="text-xs text-gray-500 text-right -mt-1">
-                    {jdText.length} characters
-                  </p>
-                )}
-              </div>
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-colors duration-300 ${
+                    isDragging
+                      ? 'bg-emerald-100 border border-emerald-200 text-emerald-600'
+                      : 'bg-gray-100 border border-gray-200 text-gray-400'
+                  }`}>
+                    <IconUpload />
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-gray-900">
+                      {isDragging ? 'Drop your resume here' : 'Drag & drop your resume'}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      or{' '}
+                      <span className="text-emerald-600 font-medium">click to browse</span>
+                    </p>
+                  </div>
+                  <input
+                    ref={fileInputRef}
+                    id="resume-file-input"
+                    type="file"
+                    className="hidden"
+                    accept=".pdf,.docx,.doc"
+                    onChange={e => {
+                      const f = e.target.files?.[0];
+                      if (f) handleFileSelect(f);
+                      e.target.value = '';
+                    }}
+                  />
+                </div>
+              )}
             </div>
 
-            {/* Error banner */}
-            {(error || status === 'error') && (
-              <div className="flex items-start gap-3 px-5 py-4 rounded-2xl
-                bg-rose-50 border border-rose-200 text-sm text-rose-700">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                  strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
-                  className="w-5 h-5 shrink-0 mt-0.5">
-                  <circle cx="12" cy="12" r="10" />
-                  <line x1="12" y1="8" x2="12" y2="12" />
-                  <line x1="12" y1="16" x2="12.01" y2="16" />
-                </svg>
-                {error || 'Something went wrong. Please try again.'}
-              </div>
-            )}
+            {/* ── Right: JD textarea ──────────────────────────────────────── */}
+            <div className="flex flex-col gap-3">
+              <label
+                htmlFor="jd-textarea"
+                className="text-sm font-semibold text-gray-900 flex items-center gap-2"
+              >
+                <span className="w-5 h-5 rounded-md bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-700 text-xs font-bold">2</span>
+                Job Description
+                <span className="text-xs font-normal text-gray-400">paste the full JD</span>
+              </label>
 
-            {/* Loading state */}
-            {status === 'loading' && (
-              <div className="flex flex-col items-center gap-5 py-8">
-                <div className="relative w-16 h-16">
-                  <div className="absolute inset-0 rounded-full border-2 border-violet-100" />
-                  <div className="absolute inset-0 rounded-full border-2 border-violet-500 border-t-transparent animate-spin" />
-                  <div className="absolute inset-0 flex items-center justify-center text-violet-600">
-                    <IconSpark />
-                  </div>
-                </div>
-                <div className="text-center space-y-1">
-                  <p className="text-sm font-bold text-gray-900">Running multi-agent analysis…</p>
-                  <p className="text-xs text-gray-500">6 AI agents evaluating your profile in parallel</p>
-                  <div className="flex flex-wrap justify-center gap-1.5 mt-3">
-                    {['Skills', 'Experience', 'Education', 'Culture Fit', 'Questions', 'Summary'].map(a => (
-                      <span key={a} className="text-xs px-2 py-0.5 rounded-full bg-violet-50 border border-violet-200 text-violet-700 animate-pulse">{a}</span>
-                    ))}
-                  </div>
-                  <p className="text-xs text-gray-400 mt-2">This usually takes 20–40 seconds</p>
-                </div>
-              </div>
-            )}
+              <textarea
+                id="jd-textarea"
+                value={jdText}
+                onChange={e => setJdText(e.target.value)}
+                placeholder={"Paste the full job description here\u2026\n\nInclude the role title, responsibilities, required skills, and any other details."}
+                className="flex-1 min-h-[240px] w-full px-4 py-3.5 rounded-2xl bg-white border border-gray-200 text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all duration-200 resize-none"
+              />
 
-            {/* Submit button */}
-            <button
-              id="analyse-button"
-              onClick={handleSubmit}
-              disabled={!canSubmit}
-              className={`w-full flex items-center justify-center gap-2.5 py-4
-                rounded-2xl text-sm font-semibold transition-all duration-300
-                ${canSubmit
-                  ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-md shadow-emerald-500/20 hover:brightness-110 active:scale-[0.99]'
-                  : 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed'
-                }`}
-            >
-              {status === 'loading' ? (
-                <>
-                  <div className="w-4 h-4 rounded-full border-2 border-white/30
-                    border-t-white animate-spin" />
-                  Analysing…
-                </>
-              ) : (
-                <>
-                  Analyse My Profile
-                  <IconArrowRight />
-                </>
+              {jdText.length > 0 && (
+                <p className="text-[11px] text-gray-400 text-right -mt-1">
+                  {jdText.length} characters
+                </p>
               )}
-            </button>
+            </div>
+          </div>
 
-            {!canSubmit && status !== 'loading' && (
-              <p className="text-xs text-gray-500 text-center -mt-4">
-                {!resumeFile && !jdText.trim()
-                  ? 'Add your resume and job description to continue'
-                  : !resumeFile
-                  ? 'Upload your resume to continue'
-                  : 'Paste a job description (at least 20 characters) to continue'}
-              </p>
+          {/* Error banner */}
+          {(error || status === 'error') && (
+            <div className="flex items-start gap-3 px-5 py-4 rounded-2xl bg-red-50 border border-red-100 text-sm text-red-700">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+                className="w-5 h-5 shrink-0 mt-0.5 text-red-500">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              {error || 'Something went wrong. Please try again.'}
+            </div>
+          )}
+
+          {/* Loading state */}
+          {status === 'loading' && (
+            <div className="flex flex-col items-center gap-5 py-10">
+              <div className="relative w-16 h-16">
+                <div className="absolute inset-0 rounded-full border-2 border-emerald-100" />
+                <div className="absolute inset-0 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
+                <div className="absolute inset-0 flex items-center justify-center text-emerald-600">
+                  <IconSpark />
+                </div>
+              </div>
+              <div className="text-center space-y-1.5">
+                <p className="text-sm font-bold text-gray-900">Running multi-agent analysis...</p>
+                <p className="text-xs text-gray-500">6 AI agents evaluating your profile in parallel</p>
+                <div className="flex flex-wrap justify-center gap-1.5 mt-3">
+                  {['Skills', 'Experience', 'Education', 'Culture Fit', 'Questions', 'Summary'].map(a => (
+                    <span key={a} className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 animate-pulse font-medium">{a}</span>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400 mt-3">This usually takes 20-40 seconds</p>
+              </div>
+            </div>
+          )}
+
+          {/* Submit button */}
+          <button
+            id="analyse-button"
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+            className={`w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-semibold transition-all duration-200 ${
+              canSubmit
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 active:scale-[0.99]'
+                : 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed'
+            }`}
+          >
+            {status === 'loading' ? (
+              <>
+                <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                Analysing...
+              </>
+            ) : (
+              <>
+                Analyse My Profile
+                <IconArrowRight />
+              </>
             )}
-          </>
-        )}
+          </button>
+
+          {!canSubmit && status !== 'loading' && (
+            <p className="text-xs text-gray-400 text-center -mt-3">
+              {!resumeFile && !jdText.trim()
+                ? 'Add your resume and job description to continue'
+                : !resumeFile
+                ? 'Upload your resume to continue'
+                : jdText.trim().length <= 20
+                ? 'Paste a job description (at least 20 characters) to continue'
+                : ''}
+            </p>
+          )}
+        </>
+      )}
     </div>
   );
 }

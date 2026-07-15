@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useCallback, ReactNode } from 'rea
 interface User {
   id: string;
   email: string;
+  name: string | null;
 }
 
 interface AuthContextValue {
@@ -10,6 +11,7 @@ interface AuthContextValue {
   user: User | null;
   login: (token: string, user: User) => void;
   logout: () => void;
+  updateUser: (updates: Partial<User>) => void;
   isAuthenticated: boolean;
 }
 
@@ -29,12 +31,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const updateUser = useCallback((updates: Partial<User>) => {
+    setUser(prev => prev ? { ...prev, ...updates } : prev);
+  }, []);
+
   return (
     <AuthContext.Provider value={{
       token,
       user,
       login,
       logout,
+      updateUser,
       isAuthenticated: !!token,
     }}>
       {children}

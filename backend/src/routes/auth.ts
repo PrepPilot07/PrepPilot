@@ -22,7 +22,7 @@ function signToken(userId: string): string {
 // ─── POST /auth/signup ───────────────────────────────────────────────────────
 
 router.post('/signup', async (req: Request, res: Response): Promise<void> => {
-  const { email, password } = req.body;
+  const { email, password, name } = req.body;
 
   // Validation
   if (!email || !password) {
@@ -42,10 +42,10 @@ router.post('/signup', async (req: Request, res: Response): Promise<void> => {
     const passwordHash = await bcrypt.hash(password, 12);
 
     const result = await pool.query(
-      `INSERT INTO users (email, password_hash)
-       VALUES ($1, $2)
-       RETURNING id, email, created_at`,
-      [email.toLowerCase().trim(), passwordHash]
+      `INSERT INTO users (email, password_hash, name)
+       VALUES ($1, $2, $3)
+       RETURNING id, email, name, created_at`,
+      [email.toLowerCase().trim(), passwordHash, name?.trim() || null]
     );
 
     const user = result.rows[0];
@@ -53,7 +53,7 @@ router.post('/signup', async (req: Request, res: Response): Promise<void> => {
 
     res.status(201).json({
       token,
-      user: { id: user.id, email: user.email, createdAt: user.created_at },
+      user: { id: user.id, email: user.email, name: user.name, createdAt: user.created_at },
     });
   } catch (err: unknown) {
     // Postgres unique_violation error code
@@ -83,7 +83,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
 
   try {
     const result = await pool.query(
-      'SELECT id, email, password_hash FROM users WHERE email = $1',
+      'SELECT id, email, name, password_hash FROM users WHERE email = $1',
       [email.toLowerCase().trim()]
     );
 
@@ -103,7 +103,7 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     const token = signToken(user.id);
     res.status(200).json({
       token,
-      user: { id: user.id, email: user.email },
+      user: { id: user.id, email: user.email, name: user.name },
     });
   } catch (err) {
     console.error('Login error:', err);
