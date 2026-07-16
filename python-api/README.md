@@ -27,7 +27,7 @@ All config lives in `python-api/.env` (already populated):
 | Variable | Default | Description |
 |---|---|---|
 | `GOOGLE_API_KEY` | — | **Required.** Google Gemini API key |
-| `GEMINI_MODEL` | `gemini-2.5-flash` | Gemini model to use |
+| `GEMINI_MODEL` | `gemini-3.1-flash-lite` | Gemini model to use |
 | `GEMINI_TEMPERATURE` | `0` | LLM temperature (0 = deterministic) |
 | `WEIGHT_SKILL` | `0.40` | Skill match weight (must sum to 1.0) |
 | `WEIGHT_EXPERIENCE` | `0.30` | Experience weight |

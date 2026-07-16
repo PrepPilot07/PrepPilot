@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import { uploadDocuments, UploadResult } from '../api/upload';
@@ -46,15 +46,6 @@ function IconArrowRight() {
   );
 }
 
-function IconSpark() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}
-      strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
-      <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6L12 2z" />
-    </svg>
-  );
-}
-
 function IconBriefcase() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}
@@ -94,12 +85,12 @@ function SkillPill({ skill }: { skill: string }) {
 
 function ResultCard({ result }: { result: UploadResult }) {
   const navigate = useNavigate();
-  const { resume, jd } = result;
+  const { resume, jd, skills } = result;
   const topSkills = resume.skills.slice(0, 10);
   const reqSkills = jd.required_skills.slice(0, 8);
-  const matchedSkills = resume.skills.filter(s =>
-    jd.required_skills.some(r => r.toLowerCase() === s.toLowerCase())
-  );
+  // Real evidence-based match count from the fit-analysis pipeline (not a
+  // literal keyword comparison) — falls back to 0 if the report predates it.
+  const matchedCount = skills?.matched.length ?? 0;
 
   return (
     <div className="space-y-4 animate-[fadeIn_0.4s_ease]">
@@ -175,7 +166,7 @@ function ResultCard({ result }: { result: UploadResult }) {
           <div className="grid grid-cols-2 gap-3 text-center">
             {[
               { label: 'Required Skills', value: jd.required_skills.length },
-              { label: 'Skills Matched', value: matchedSkills.length },
+              { label: 'Skills Matched', value: matchedCount },
             ].map(s => (
               <div key={s.label} className="bg-gray-50 rounded-xl py-3 border border-gray-100">
                 <p className="text-xl font-bold text-gray-900">{s.value}</p>
@@ -189,16 +180,12 @@ function ResultCard({ result }: { result: UploadResult }) {
               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-2">Must-have skills</p>
               <div className="flex flex-wrap gap-1.5">
                 {reqSkills.map(s => (
-                  <span key={s}
-                    className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border ${
-                      matchedSkills.map(m => m.toLowerCase()).includes(s.toLowerCase())
-                        ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                        : 'bg-gray-50 border-gray-200 text-gray-600'
-                    }`}>
+                  <span key={s} className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium border bg-gray-50 border-gray-200 text-gray-600">
                     {s}
                   </span>
                 ))}
               </div>
+              <p className="text-[11px] text-gray-400 mt-2">See the full requirement-by-requirement analysis on the next page.</p>
             </div>
           )}
         </div>
@@ -246,6 +233,40 @@ function ResultCard({ result }: { result: UploadResult }) {
   );
 }
 
+// ── Analysis progress ─────────────────────────────────────────────────────────
+
+// Mirrors the fit-analysis graph in python-api/src/graph/build.py. /upload is a
+// single blocking POST with no progress stream, and the critique node can route
+// back to an earlier one, so these advance on a timer and are indicative only —
+// never claim a stage has finished.
+const ANALYSIS_STAGES = [
+  'Reading your resume and the job description',
+  'Matching your experience against each requirement',
+  'Weighing the gaps',
+  'Re-checking the reasoning',
+  'Writing up your report',
+];
+
+const STAGE_INTERVAL_MS = 13_000;
+
+/** Walks the stage labels while active, holding on the last one. */
+function useAnalysisStage(active: boolean) {
+  const [stage, setStage] = useState(0);
+
+  useEffect(() => {
+    if (!active) {
+      setStage(0);
+      return;
+    }
+    const id = setInterval(() => {
+      setStage(s => Math.min(s + 1, ANALYSIS_STAGES.length - 1));
+    }, STAGE_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [active]);
+
+  return ANALYSIS_STAGES[stage];
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function UploadPage() {
@@ -254,10 +275,13 @@ export default function UploadPage() {
 
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [jdText, setJdText] = useState('');
+  const [days, setDays] = useState<number>(15);
   const [isDragging, setIsDragging] = useState(false);
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [error, setError] = useState('');
   const [result, setResult] = useState<UploadResult | null>(null);
+
+  const analysisStage = useAnalysisStage(status === 'loading');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -286,10 +310,14 @@ export default function UploadPage() {
   // ── Submit ──────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (!token || !resumeFile || !jdText.trim()) return;
+    if (!Number.isInteger(days) || days < 1 || days > 60) {
+      setError('Enter days until your interview (between 1 and 60).');
+      return;
+    }
     setStatus('loading');
     setError('');
 
-    const resp = await uploadDocuments(token, resumeFile, jdText);
+    const resp = await uploadDocuments(token, resumeFile, jdText, days);
 
     if (resp.error || !resp.data) {
       setStatus('error');
@@ -303,7 +331,13 @@ export default function UploadPage() {
     navigate('/analysis', { state: { result: resp.data } });
   };
 
-  const canSubmit = !!resumeFile && jdText.trim().length > 20 && status !== 'loading';
+  const canSubmit =
+    !!resumeFile &&
+    jdText.trim().length > 20 &&
+    Number.isInteger(days) &&
+    days >= 1 &&
+    days <= 60 &&
+    status !== 'loading';
 
   return (
     <div className="p-6 md:p-8 max-w-4xl mx-auto space-y-7 animate-in fade-in duration-500 pb-16">
@@ -427,6 +461,27 @@ export default function UploadPage() {
             </div>
           </div>
 
+          {/* ── Days until interview ─────────────────────────────────────── */}
+          <div className="flex flex-col gap-3">
+            <label
+              htmlFor="days-input"
+              className="text-sm font-semibold text-gray-900 flex items-center gap-2"
+            >
+              <span className="w-5 h-5 rounded-md bg-emerald-100 border border-emerald-200 flex items-center justify-center text-emerald-700 text-xs font-bold">3</span>
+              Days until your interview
+              <span className="text-xs font-normal text-gray-400">used to size your roadmap &middot; 1&ndash;60</span>
+            </label>
+            <input
+              id="days-input"
+              type="number"
+              min={1}
+              max={60}
+              value={Number.isNaN(days) ? '' : days}
+              onChange={e => setDays(Math.floor(e.target.valueAsNumber))}
+              className="w-40 px-4 py-3 rounded-2xl bg-white border border-gray-200 text-sm text-gray-900 outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all"
+            />
+          </div>
+
           {/* Error banner */}
           {(error || status === 'error') && (
             <div className="flex items-start gap-3 px-5 py-4 rounded-2xl bg-red-50 border border-red-100 text-sm text-red-700">
@@ -441,26 +496,12 @@ export default function UploadPage() {
             </div>
           )}
 
-          {/* Loading state */}
+          {/* Loading state — the submit button below carries the spinner, so this
+              only says what the pipeline is on and how long to expect to wait. */}
           {status === 'loading' && (
-            <div className="flex flex-col items-center gap-5 py-10">
-              <div className="relative w-16 h-16">
-                <div className="absolute inset-0 rounded-full border-2 border-emerald-100" />
-                <div className="absolute inset-0 rounded-full border-2 border-emerald-500 border-t-transparent animate-spin" />
-                <div className="absolute inset-0 flex items-center justify-center text-emerald-600">
-                  <IconSpark />
-                </div>
-              </div>
-              <div className="text-center space-y-1.5">
-                <p className="text-sm font-bold text-gray-900">Running multi-agent analysis...</p>
-                <p className="text-xs text-gray-500">6 AI agents evaluating your profile in parallel</p>
-                <div className="flex flex-wrap justify-center gap-1.5 mt-3">
-                  {['Skills', 'Experience', 'Education', 'Culture Fit', 'Questions', 'Summary'].map(a => (
-                    <span key={a} className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 animate-pulse font-medium">{a}</span>
-                  ))}
-                </div>
-                <p className="text-xs text-gray-400 mt-3">This usually takes 20-40 seconds</p>
-              </div>
+            <div className="py-6 text-center space-y-1" role="status" aria-live="polite">
+              <p className="text-sm text-gray-600">{analysisStage}</p>
+              <p className="text-xs text-gray-400">Usually takes 1&ndash;2 minutes</p>
             </div>
           )}
 
@@ -477,7 +518,7 @@ export default function UploadPage() {
           >
             {status === 'loading' ? (
               <>
-                <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
+                <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white motion-safe:animate-spin" />
                 Analysing...
               </>
             ) : (

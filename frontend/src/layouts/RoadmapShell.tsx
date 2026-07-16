@@ -7,12 +7,14 @@ import {
   Map,
   MessageSquare,
   Plus,
-  Bell,
+  HelpCircle,
   Settings,
   LogOut,
   Flame,
   FileText,
 } from 'lucide-react';
+import NotificationBell from '../components/NotificationBell';
+import AboutModal from '../components/AboutModal';
 
 // ── Sidebar nav item ──────────────────────────────────────────────────────────
 
@@ -54,6 +56,7 @@ export default function RoadmapShell() {
   const currentPath = location.pathname;
   const [roleTitle, setRoleTitle] = useState<string | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -115,6 +118,8 @@ export default function RoadmapShell() {
           <NavItem
             icon={<MessageSquare size={16} />}
             label="WhatsApp"
+            active={currentPath === '/whatsapp'}
+            onClick={() => navigate('/whatsapp')}
           />
           <NavItem
             icon={<Plus size={16} />}
@@ -199,21 +204,25 @@ export default function RoadmapShell() {
           {/* Breadcrumb */}
           <div className="flex items-center gap-1.5 text-sm text-gray-500">
             <span className="font-medium text-gray-800">
-              {currentPath === '/dashboard' ? 'Dashboard' : currentPath === '/analysis' ? 'Analysis Report' : currentPath === '/upload' ? 'New Plan' : currentPath === '/settings' ? 'Settings' : 'Your Roadmap'}
+              {currentPath === '/dashboard' ? 'Dashboard' : currentPath === '/analysis' ? 'Analysis Report' : currentPath === '/upload' ? 'New Plan' : currentPath === '/settings' ? 'Settings' : currentPath === '/whatsapp' ? 'WhatsApp connection' : 'Your Roadmap'}
             </span>
             <span className="text-gray-300">|</span>
             <span>{today}</span>
           </div>
           {/* Action icons */}
           <div className="flex items-center gap-2">
-            <button className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-gray-800 transition-colors">
-              <Bell size={15} />
-            </button>
-            <button className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-gray-800 transition-colors text-xs font-semibold">
-              ?
+            <NotificationBell />
+            <button
+              onClick={() => setShowAbout(true)}
+              aria-label="About PrepPilot"
+              className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 hover:text-gray-800 transition-colors"
+            >
+              <HelpCircle size={15} />
             </button>
           </div>
         </header>
+
+        {showAbout && <AboutModal onClose={() => setShowAbout(false)} />}
 
         {/* Page content via Outlet */}
         <main className="flex-1 overflow-y-auto">

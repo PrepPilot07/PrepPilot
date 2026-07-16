@@ -1,6 +1,6 @@
 <div align="center">
   <div style="background-color: #059669; color: white; width: 64px; height: 64px; border-radius: 16px; display: inline-flex; align-items: center; justify-content: center; font-size: 32px; font-weight: bold; margin-bottom: 16px;">
-    P
+  
   </div>
   <h1 align="center">PrepPilot</h1>
   <p align="center">

@@ -6,10 +6,17 @@ Start with:
     python -m uvicorn api_server:app --port 8001 --reload
 
 Agent pipeline (execution order):
-    Wave 1 — Parallel: ResumeParser + JDParser
-    Wave 2 — Parallel: SkillMatcher + ExperienceEvaluator + EducationEvaluator + CultureFit + ResumeSummarizer
+    Wave 1 — Sequential graph: FitAnalysisGraph (resume_parser + jd_parser in parallel,
+             then semantic_matcher -> gap_reasoner -> critique_node (loops back on
+             failure, capped at 2 retries) -> synthesizer). Produces parsed_resume,
+             parsed_jd, and an evidence-based FitReport (replaces the old flat
+             skill-matcher).
+    Wave 2 — Parallel: ExperienceEvaluator + EducationEvaluator + CultureFit + ResumeSummarizer
     Wave 3 — Parallel: DecisionAgent + InterviewQuestionAgent (needs skill gaps)
-    Wave 4 — Sequential: RoadmapAgent (needs all prior results)
+
+Roadmap generation lives in the Node backend (services/roadmapGeneration.ts), which
+sizes the plan to the user's requested day count and targets the gaps this pipeline
+identifies — this service does not generate roadmaps.
 """
 from __future__ import annotations
 
@@ -39,11 +46,9 @@ from src.agents.decision_agent import DecisionAgent
 from src.agents.education_evaluator import EducationEvaluatorAgent
 from src.agents.experience_evaluator import ExperienceEvaluatorAgent
 from src.agents.interview_question_agent import InterviewQuestionAgent
-from src.agents.jd_parser import JDParserAgent
-from src.agents.resume_parser import ResumeParserAgent
 from src.agents.resume_summarizer import ResumeSummarizerAgent
-from src.agents.roadmap_agent import RoadmapAgent
-from src.agents.skill_matcher import SkillMatcherAgent
+from src.graph.build import get_fit_analysis_graph
+from src.graph.state import SkillFitState
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("preppilot")
@@ -185,38 +190,33 @@ async def analyse_candidate(
     if not jd_text.strip():
         raise HTTPException(400, detail="Job description text cannot be empty.")
 
-    # ── Wave 1: Parse resume + JD in parallel ──────────────────────────────────
-    resume_agent = ResumeParserAgent()
-    jd_agent = JDParserAgent()
-
-    parsed_resume, parsed_jd = await asyncio.gather(
-        _run_in_thread(resume_agent.run, resume_text),
-        _run_in_thread(jd_agent.run, jd_text),
+    # ── Wave 1: Resume/JD parsing + evidence-based fit graph ──────────────────
+    # Replaces the old flat skill-matcher: reasons about actual resume evidence
+    # against each JD requirement, with a self-critique loop (capped retries).
+    fit_graph = get_fit_analysis_graph()
+    graph_state = await _run_in_thread(
+        fit_graph.invoke, SkillFitState(resume_text=resume_text, jd_text=jd_text)
     )
+
+    parsed_resume = graph_state["parsed_resume"]
+    parsed_jd = graph_state["parsed_jd"]
+    skill_result = graph_state["fit_report"]
 
     resume_dict = parsed_resume.model_dump()
     jd_dict = parsed_jd.model_dump()
 
-    # ── Wave 2: All evaluators in parallel ────────────────────────────────────
-    skill_agent = SkillMatcherAgent()
+    # ── Wave 2: Remaining evaluators in parallel ──────────────────────────────
     exp_agent = ExperienceEvaluatorAgent()
     edu_agent = EducationEvaluatorAgent()
     culture_agent = CultureFitAgent()
     summarizer = ResumeSummarizerAgent()
 
     (
-        skill_result,
         exp_result,
         edu_result,
         culture_result,
         narrative_summary,
     ) = await asyncio.gather(
-        _run_in_thread(
-            skill_agent.run,
-            parsed_resume.skills,
-            parsed_jd.required_skills,
-            parsed_jd.preferred_skills,
-        ),
         _run_in_thread(exp_agent.run, resume_dict, jd_dict),
         _run_in_thread(edu_agent.run, resume_dict, jd_dict),
         _run_in_thread(culture_agent.run, parsed_resume.summary, jd_text),
@@ -271,17 +271,6 @@ async def analyse_candidate(
     behavioral_qs = all_questions[6:8]  # questions 7-8
     cultural_qs = all_questions[8:10]   # questions 9-10
 
-    # ── Wave 4: Roadmap generation (sequential — depends on all prior results) ──
-    roadmap_agent = RoadmapAgent()
-    roadmap_result = await _run_in_thread(
-        roadmap_agent.run,
-        skill_result.missing,
-        skill_result.partial,
-        skill_result.matched,
-        resume_dict,
-        jd_dict,
-    )
-
     # ── Return full report ─────────────────────────────────────────────────────
     return {
         # Raw parsed data
@@ -294,9 +283,6 @@ async def analyse_candidate(
         "experience": {
             "score": exp_result.score,
             "reasoning": exp_result.reasoning,
-            "strengths": [],   # Experience evaluator returns score+reasoning; strengths/weaknesses come from decision
-            "weaknesses": [],
-            "seniority_fit": "well-matched",
         },
         "education": {
             "score": edu_result.score,
@@ -316,8 +302,6 @@ async def analyse_candidate(
             "behavioral": behavioral_qs,
             "cultural": cultural_qs,
         },
-        # 15-day personalised roadmap
-        "roadmap": roadmap_result.model_dump(),
     }
 
 

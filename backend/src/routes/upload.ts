@@ -5,6 +5,7 @@ import axios from 'axios';
 import FormData from 'form-data';
 import pool from '../db/pool';
 import { verifyToken, AuthRequest } from '../middleware/auth';
+import { buildRoadmapContext, generateRoadmap } from '../services/roadmapGeneration';
 
 const router = Router();
 
@@ -94,24 +95,29 @@ router.post(
     }
 
     // ── Persist to database ────────────────────────────────────────────────────
+    // One row per user, upserted on the user_id unique constraint (migration
+    // 009). uploaded_at is the analysis's identity — the roadmap is stamped with
+    // it below so a plan can be proven to belong to this analysis. Kept as raw
+    // Postgres text: a JS Date truncates timestamptz's microseconds, which would
+    // make the stamp differ from its source and flag every roadmap stale.
+    let analysisUploadedAt: string;
     try {
       const resumeJson = JSON.stringify(report.resume);
       const jdJson = JSON.stringify(report.jd);
       const reportJson = JSON.stringify(report);
 
-      await pool.query(
+      const docRes = await pool.query(
         `INSERT INTO user_documents (user_id, parsed_resume, parsed_jd, analysis_report)
          VALUES ($1, $2, $3, $4)
-         ON CONFLICT DO NOTHING`,
+         ON CONFLICT (user_id) DO UPDATE
+           SET parsed_resume   = EXCLUDED.parsed_resume,
+               parsed_jd       = EXCLUDED.parsed_jd,
+               analysis_report = EXCLUDED.analysis_report,
+               uploaded_at     = NOW()
+         RETURNING uploaded_at::text AS uploaded_at`,
         [userId, resumeJson, jdJson, reportJson]
       );
-
-      await pool.query(
-        `UPDATE user_documents
-         SET parsed_resume = $2, parsed_jd = $3, analysis_report = $4, uploaded_at = NOW()
-         WHERE user_id = $1`,
-        [userId, resumeJson, jdJson, reportJson]
-      );
+      analysisUploadedAt = docRes.rows[0].uploaded_at as string;
 
       await pool.query(
         `UPDATE users SET has_uploaded_documents = TRUE WHERE id = $1`,
@@ -123,35 +129,58 @@ router.post(
       return;
     }
 
-    // ── Persist roadmap + questions (Wave 4 output) ────────────────────────────
-    const roadmapData = report.roadmap as {
-      days?: Array<{
-        day_number: number;
-        topic: string;
-        question_text: string;
-        learning_goal?: string;
-        difficulty?: string;
-        focus_skill?: string;
-      }>;
-      summary?: string;
-    } | undefined;
+    // ── Persist roadmap + questions ────────────────────────────────────────────
+    // Roadmap length is driven by the user's "days until interview" (N). If
+    // generation fails the analysis is still saved; the user can build a plan
+    // from the roadmap page's "Generate My Roadmap" action.
+    type RoadmapDayData = {
+      day_number: number;
+      topic: string;
+      question_text: string;
+      learning_goal?: string | null;
+      difficulty?: string | null;
+      focus_skill?: string | null;
+    };
 
-    if (roadmapData?.days && Array.isArray(roadmapData.days) && roadmapData.days.length > 0) {
+    // Validate requested days (1–60); default to 15 if missing/invalid.
+    let prepDays = Number.parseInt(String(req.body?.days ?? ''), 10);
+    if (!Number.isInteger(prepDays) || prepDays < 1 || prepDays > 60) prepDays = 15;
+
+    let daysToPersist: RoadmapDayData[] | null = null;
+    let roadmapError: string | null = null;
+    try {
+      const roadmapContext = buildRoadmapContext(report);
+      if (!roadmapContext) {
+        throw new Error('analysis produced no requirement matches to build a roadmap from');
+      }
+      daysToPersist = await generateRoadmap(prepDays, roadmapContext);
+    } catch (genErr) {
+      // Non-fatal for the analysis, but NOT silent: any roadmap still in the DB
+      // belongs to a previous analysis. It stays (the user may be part-way
+      // through it) but is reported here and marked stale below, so it can never
+      // pass as a plan for this analysis.
+      console.error('[upload] roadmap generation failed:', genErr);
+      roadmapError = "Analysis saved, but we couldn't build your roadmap from it. Open the roadmap page and generate one.";
+    }
+
+    if (daysToPersist && daysToPersist.length > 0) {
       try {
+        // interview_date reflects however many days we actually persisted.
         const interviewDate = new Date();
-        interviewDate.setDate(interviewDate.getDate() + 15);
+        interviewDate.setDate(interviewDate.getDate() + daysToPersist.length);
         const interviewDateStr = interviewDate.toISOString().split('T')[0];
 
         // Upsert roadmap row — one per user
         const roadmapRes = await pool.query(
-          `INSERT INTO roadmaps (user_id, topics, interview_date)
-           VALUES ($1, $2, $3)
+          `INSERT INTO roadmaps (user_id, topics, interview_date, analysis_uploaded_at)
+           VALUES ($1, $2, $3, $4::timestamptz)
            ON CONFLICT (user_id) DO UPDATE
              SET topics = EXCLUDED.topics,
                  interview_date = EXCLUDED.interview_date,
+                 analysis_uploaded_at = EXCLUDED.analysis_uploaded_at,
                  created_at = NOW()
            RETURNING id`,
-          [userId, JSON.stringify(roadmapData.days), interviewDateStr]
+          [userId, JSON.stringify(daysToPersist), interviewDateStr, analysisUploadedAt]
         );
         const roadmapId = roadmapRes.rows[0].id as string;
 
@@ -160,9 +189,9 @@ router.post(
 
         // The earliest day starts as the active ('today') day; the rest are locked
         // until the user completes each one in turn.
-        const minDayNumber = Math.min(...roadmapData.days.map((d) => d.day_number));
+        const minDayNumber = Math.min(...daysToPersist.map((d) => d.day_number));
 
-        for (const day of roadmapData.days) {
+        for (const day of daysToPersist) {
           await pool.query(
             `INSERT INTO questions (roadmap_id, day_number, topic, question_text, learning_goal, difficulty, focus_skill, status)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
@@ -179,15 +208,19 @@ router.post(
           );
         }
 
-        console.log(`[upload] Roadmap upserted (${roadmapData.days.length} questions) for user ${userId}`);
+        console.log(`[upload] Roadmap upserted (${daysToPersist.length} days) for user ${userId}`);
       } catch (roadmapErr) {
-        // Non-fatal: log and continue — analysis result is already saved
-        console.error('[upload] Roadmap DB error (non-fatal):', roadmapErr);
+        // Analysis is saved, but the persisted roadmap (if any) is now a
+        // previous analysis's. Report it rather than letting it pass as current.
+        console.error('[upload] Roadmap DB error:', roadmapErr);
+        roadmapError = "Analysis saved, but we couldn't save your roadmap. Open the roadmap page and generate one.";
       }
     }
 
     // ── Return full report to frontend ────────────────────────────────────────
-    res.status(200).json({ success: true, ...report });
+    // roadmap_error is non-null when the plan on file does NOT reflect this
+    // analysis; GET /api/roadmap reports the same condition as is_stale.
+    res.status(200).json({ success: true, roadmap_error: roadmapError, ...report });
   }
 );
 

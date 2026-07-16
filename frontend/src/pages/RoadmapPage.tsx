@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../store/AuthContext';
 import {
   fetchRoadmap,
+  generateRoadmap,
   RoadmapDay,
   RoadmapResponse,
   CompleteDayResult,
 } from '../api/roadmap';
-import { ChevronRight, RefreshCw, Upload, Check, Lock } from 'lucide-react';
+import { ChevronRight, RefreshCw, Upload, Check, Lock, Sparkles, Loader2, CalendarDays, AlertTriangle } from 'lucide-react';
 import PracticeModal from '../components/PracticeModal';
 
 // ── Skeleton card ─────────────────────────────────────────────────────────────
@@ -96,20 +97,19 @@ function DayCard({
         onKeyDown={
           isCompleted
             ? (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onPractice(day);
-                }
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onPractice(day);
               }
+            }
             : undefined
         }
-        className={`flex-1 rounded-2xl border p-5 mb-4 transition-shadow hover:shadow-sm ${
-          isCompleted
+        className={`flex-1 rounded-2xl border p-5 mb-4 transition-shadow hover:shadow-sm ${isCompleted
             ? 'border-gray-100 bg-gray-50/70 cursor-pointer hover:border-emerald-200'
             : isToday
-            ? 'border-emerald-200 bg-white shadow-sm'
-            : 'border-gray-200 bg-white'
-        }`}
+              ? 'border-emerald-200 bg-white shadow-sm'
+              : 'border-gray-200 bg-white'
+          }`}
       >
         <div className="flex items-start gap-3">
           <div className="flex-1 min-w-0">
@@ -125,9 +125,8 @@ function DayCard({
 
             {/* Topic title */}
             <h3
-              className={`font-semibold text-[15px] leading-snug mb-1 ${
-                isCompleted ? 'text-gray-500' : 'text-gray-900'
-              }`}
+              className={`font-semibold text-[15px] leading-snug mb-1 ${isCompleted ? 'text-gray-500' : 'text-gray-900'
+                }`}
             >
               {day.topic}
             </h3>
@@ -198,7 +197,10 @@ function ProgressCard({ completed, total }: { completed: number; total: number }
   return (
     <div className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
       <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">
-        15-Day Sprint
+        {total}-Day Sprint
+
+
+
       </p>
       <p className="text-2xl font-black text-gray-900 mb-3">
         <span className="text-emerald-600">{completed}</span>
@@ -258,6 +260,88 @@ function WhatWeFoundCard({
   );
 }
 
+// ── Generate roadmap form ─────────────────────────────────────────────────────
+
+function GenerateRoadmapForm({
+  onGenerated,
+  compact = false,
+  defaultDays = 15,
+}: {
+  onGenerated: (roadmap: RoadmapResponse) => void;
+  compact?: boolean;
+  defaultDays?: number;
+}) {
+  const { token } = useAuth();
+  const [days, setDays] = useState<number>(defaultDays);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async () => {
+    if (!token || generating) return;
+    if (!Number.isInteger(days) || days < 1 || days > 60) {
+      setError('Enter a number of days between 1 and 60.');
+      return;
+    }
+    setGenerating(true);
+    setError(null);
+    const res = await generateRoadmap(token, days);
+    setGenerating(false);
+    if (res.error || !res.data) {
+      setError(res.error ?? "Couldn't generate your roadmap, please try again.");
+      return;
+    }
+    onGenerated(res.data);
+  };
+
+  return (
+    <div className={compact ? 'w-full' : 'w-full max-w-sm'}>
+      <label className="block text-xs font-semibold text-gray-500 mb-1.5 text-left">
+        Days until your interview
+      </label>
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <CalendarDays
+            size={15}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
+          />
+          <input
+            type="number"
+            min={1}
+            max={60}
+            value={Number.isNaN(days) ? '' : days}
+            onChange={(e) => setDays(Math.floor(e.target.valueAsNumber))}
+            disabled={generating}
+            className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-300 disabled:opacity-60"
+          />
+        </div>
+        <button
+          onClick={submit}
+          disabled={generating}
+          className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors shadow-sm shadow-emerald-200 whitespace-nowrap"
+        >
+          {generating ? (
+            <>
+              <Loader2 size={15} className="animate-spin" />
+              Generating…
+            </>
+          ) : (
+            <>
+              <Sparkles size={15} />
+              Generate My Roadmap
+            </>
+          )}
+        </button>
+      </div>
+      {generating && (
+        <p className="mt-2 text-xs text-gray-400 text-left">
+          Building your plan with AI — this can take a few seconds.
+        </p>
+      )}
+      {error && <p className="mt-2 text-xs text-rose-600 text-left">{error}</p>}
+    </div>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function RoadmapPage() {
@@ -269,6 +353,15 @@ export default function RoadmapPage() {
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [practiceDay, setPracticeDay] = useState<RoadmapDay | null>(null);
+  const [showRegen, setShowRegen] = useState(false);
+
+  // Drop a freshly generated roadmap straight into state (also clears empty/error).
+  const handleGenerated = (generated: RoadmapResponse) => {
+    setNotFound(false);
+    setError(null);
+    setRoadmap(generated);
+    setShowRegen(false);
+  };
 
   const loadRoadmap = async () => {
     if (!token) {
@@ -341,19 +434,26 @@ export default function RoadmapPage() {
     return (
       <div className="max-w-3xl mx-auto px-6 py-20 flex flex-col items-center text-center gap-6">
         <div className="w-16 h-16 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center">
-          <Upload size={28} className="text-emerald-600" />
+          <Sparkles size={28} className="text-emerald-600" />
         </div>
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">No roadmap yet</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Build your roadmap</h2>
           <p className="text-gray-500 max-w-sm">
-            Upload your resume and job description to generate your personalised 15-day interview prep plan.
+            Tell us how many days you have until your interview and we'll generate a
+            focused, day-by-day prep plan for you.
           </p>
         </div>
+
+        <div className="flex flex-col items-center gap-2">
+          <GenerateRoadmapForm onGenerated={handleGenerated} />
+        </div>
+
         <button
           onClick={() => navigate('/upload')}
-          className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-colors shadow-sm"
+          className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-emerald-600 transition-colors"
         >
-          Upload documents →
+          <Upload size={14} />
+          Or upload a resume & JD instead
         </button>
       </div>
     );
@@ -410,24 +510,68 @@ export default function RoadmapPage() {
             {headlineRole}.
           </h1>
           <p className="text-gray-500 text-[15px]">
-            A focused 15-day sprint for a {subtitleRole} interview.
+            A focused {totalDays}-day sprint for a {subtitleRole} interview.
           </p>
         </div>
 
         {/* Progress card — top right */}
         <div className="w-52 shrink-0">
           <ProgressCard completed={completedCount} total={totalDays} />
+          <button
+            onClick={() => setShowRegen((v) => !v)}
+            className="mt-2 w-full inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-emerald-600 transition-colors"
+          >
+            <RefreshCw size={12} />
+            {showRegen ? 'Cancel' : 'Regenerate'}
+          </button>
         </div>
       </div>
+
+      {/* ── Stale plan notice ──────────────────────────────────────────────── */}
+      {/* This plan predates the analysis on file — it was built from an older
+          resume/JD. Previously it rendered as though it were current. */}
+      {roadmap.is_stale && !showRegen && (
+        <div className="mb-8 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4">
+          <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-amber-900">
+              This plan is from an earlier analysis
+            </p>
+            <p className="mt-0.5 text-xs text-amber-800">
+              You've run a newer resume &amp; JD analysis since this roadmap was built, so
+              these topics may not match your current skill gaps.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowRegen(true)}
+            className="shrink-0 rounded-xl bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-amber-700"
+          >
+            Rebuild
+          </button>
+        </div>
+      )}
+
+      {/* ── Regenerate panel ───────────────────────────────────────────────── */}
+      {showRegen && (
+        <div className="mb-8 bg-white rounded-2xl border border-gray-200 p-5 shadow-sm">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1.5">
+            Regenerate roadmap
+          </p>
+          <p className="text-xs text-gray-500 mb-3">
+            This replaces your current plan — completed progress will reset.
+          </p>
+          <GenerateRoadmapForm compact defaultDays={totalDays} onGenerated={handleGenerated} />
+        </div>
+      )}
 
       {/* ── What we found ──────────────────────────────────────────────────── */}
       <div className="mb-8">
         <WhatWeFoundCard roadmap={roadmap} />
       </div>
 
-      {/* ── 15-day timeline ────────────────────────────────────────────────── */}
+      {/* ── Timeline ───────────────────────────────────────────────────────── */}
       <div>
-        <h2 className="text-sm font-semibold text-gray-700 mb-4">Your 15-Day Plan</h2>
+        <h2 className="text-sm font-semibold text-gray-700 mb-4">Your {totalDays}-Day Plan</h2>
         <div className="relative">
           {days.map((day, i) => (
             <DayCard

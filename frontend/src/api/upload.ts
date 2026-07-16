@@ -46,20 +46,37 @@ export interface ParsedJD {
   soft_skills: string[];
 }
 
+export interface RequirementMatch {
+  requirement: string;
+  category: string;
+  importance: 'must_have' | 'nice_to_have';
+  strength: 'strong' | 'partial' | 'weak' | 'none';
+  confidence: number;
+  evidence: string[];
+  reasoning: string;
+}
+
+export interface GapAssessment {
+  requirement: string;
+  severity: 'hard_blocker' | 'learnable' | 'partially_covered';
+  explanation: string;
+}
+
 export interface SkillAnalysis {
   matched: string[];
   missing: string[];
   partial: string[];
   score: number;
   reasoning: string;
+  // Evidence-based fit analysis (LangGraph pipeline) — optional so this type
+  // still matches older cached reports that predate the richer output.
+  requirement_matches?: RequirementMatch[];
+  gaps?: GapAssessment[];
 }
 
 export interface ExperienceResult {
   score: number;
   reasoning: string;
-  strengths: string[];
-  weaknesses: string[];
-  seniority_fit: 'under-qualified' | 'well-matched' | 'over-qualified';
 }
 
 export interface EducationResult {
@@ -117,11 +134,13 @@ export interface UploadResult {
 export async function uploadDocuments(
   token: string,
   resumeFile: File,
-  jdText: string
+  jdText: string,
+  days: number
 ): Promise<{ data?: UploadResult; error?: string; status: number }> {
   const formData = new FormData();
   formData.append('resume', resumeFile);
   formData.append('jdText', jdText);
+  formData.append('days', String(days));
 
   try {
     const res = await fetch(`${API_BASE}/api/upload`, {

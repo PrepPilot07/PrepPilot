@@ -48,6 +48,18 @@ class ParsedResume(BaseModel):
     summary: str = ""
 
 
+class JDRequirement(BaseModel):
+    """A single JD requirement with inferred importance and rationale."""
+
+    requirement: str = Field(description="The requirement itself, in a few words")
+    category: Literal["skill", "experience", "education", "soft_skill", "responsibility"] = "skill"
+    importance: Literal["must_have", "nice_to_have"] = "must_have"
+    rationale: str = Field(
+        default="",
+        description="Why this requirement likely matters for the role, beyond its literal wording",
+    )
+
+
 class ParsedJD(BaseModel):
     """Structured representation of a parsed job description."""
 
@@ -58,6 +70,11 @@ class ParsedJD(BaseModel):
     education_required: str = ""
     responsibilities: List[str] = Field(default_factory=list)
     soft_skills: List[str] = Field(default_factory=list)
+    requirements: List[JDRequirement] = Field(
+        default_factory=list,
+        description="Every requirement implied by the JD (skills, experience, education, "
+        "soft skills, responsibilities), each tagged with importance and why it matters",
+    )
 
 
 class SkillMatchResult(BaseModel):
@@ -68,6 +85,75 @@ class SkillMatchResult(BaseModel):
     partial: List[str] = Field(default_factory=list)
     score: float = Field(default=0.0, ge=0.0, le=100.0)
     reasoning: str = ""
+
+
+class RequirementMatch(BaseModel):
+    """Evidence-based assessment of one JD requirement against the resume."""
+
+    requirement: str
+    category: str = "skill"
+    importance: Literal["must_have", "nice_to_have"] = "must_have"
+    strength: Literal["strong", "partial", "weak", "none"] = "none"
+    confidence: float = Field(ge=0.0, le=1.0, default=0.5)
+    evidence: List[str] = Field(
+        default_factory=list,
+        description="Specific resume content (roles, projects, achievements) that justifies this strength",
+    )
+    reasoning: str = ""
+
+
+class SemanticMatchBatch(BaseModel):
+    """Structured-output wrapper: one match per JD requirement."""
+
+    matches: List[RequirementMatch] = Field(default_factory=list)
+
+
+class GapAssessment(BaseModel):
+    """Reasoning about the real-world impact of a weak/missing requirement."""
+
+    requirement: str
+    severity: Literal["hard_blocker", "learnable", "partially_covered"] = "learnable"
+    explanation: str = ""
+
+
+class GapAssessmentBatch(BaseModel):
+    """Structured-output wrapper: one gap assessment per weak/partial/missing requirement."""
+
+    gaps: List[GapAssessment] = Field(default_factory=list)
+
+
+class CritiqueResult(BaseModel):
+    """Self-critique pass over a draft semantic match + gap analysis."""
+
+    passed: bool = True
+    issues: List[str] = Field(
+        default_factory=list,
+        description="Specific problems found: generic reasoning, unsupported claims, hallucinated evidence",
+    )
+    flagged_requirements: List[str] = Field(default_factory=list)
+    rework_target: Optional[Literal["semantic_matcher", "gap_reasoner"]] = None
+
+
+class NarrativeOutput(BaseModel):
+    """Structured-output wrapper for the synthesizer's evidence-cited narrative."""
+
+    reasoning: str
+
+
+class FitReport(BaseModel):
+    """Final evidence-based skill/requirement fit report."""
+
+    # Backward-compatible fields — consumed as-is by DecisionAgent,
+    # InterviewQuestionAgent, and the existing frontend.
+    matched: List[str] = Field(default_factory=list)
+    missing: List[str] = Field(default_factory=list)
+    partial: List[str] = Field(default_factory=list)
+    score: float = Field(default=0.0, ge=0.0, le=100.0)
+    reasoning: str = ""
+
+    # Evidence-based additions.
+    requirement_matches: List[RequirementMatch] = Field(default_factory=list)
+    gaps: List[GapAssessment] = Field(default_factory=list)
 
 
 class EvaluationResult(BaseModel):
@@ -106,29 +192,3 @@ class DecisionResult(BaseModel):
     cons: List[str] = Field(default_factory=list)
     risks: List[str] = Field(default_factory=list)
     confidence: float = Field(ge=0.0, le=1.0)
-
-
-# ── Roadmap schemas ───────────────────────────────────────────────────────────
-
-class RoadmapDay(BaseModel):
-    """A single day in the 15-day interview preparation roadmap."""
-
-    day_number: int = Field(ge=1, le=15, description="Day in the plan, 1-indexed")
-    topic: str = Field(description="Short topic title for this day (e.g. 'System Design Basics')")
-    learning_goal: str = Field(description="One-sentence goal the candidate should achieve today")
-    question_text: str = Field(description="A self-contained interview question for today's practice")
-    difficulty: Literal["easy", "medium", "hard"] = Field(
-        description="Difficulty level — ramps from easy (days 1-5) to hard (days 13-15)"
-    )
-    focus_skill: str = Field(description="The primary skill or competency targeted today")
-
-
-class RoadmapPlan(BaseModel):
-    """A 15-day personalised interview preparation roadmap."""
-
-    days: List[RoadmapDay] = Field(
-        description="Ordered list of daily preparation items (MUST have exactly 15 entries, do not leave empty)"
-    )
-    summary: str = Field(
-        description="2-3 sentence overview of the plan, mentioning the role and key focus areas"
-    )

@@ -5,6 +5,22 @@ from typing import Any, Dict
 from langchain_core.messages import HumanMessage, SystemMessage
 from src.utils.llm import get_llm
 
+
+def _extract_text(content: Any) -> str:
+    """Gemini sometimes returns `.content` as a list of content blocks (each a
+    dict with a "text" key, alongside non-textual metadata like thought
+    signatures) instead of a plain string. Extract just the text."""
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, list):
+        parts = [
+            block if isinstance(block, str) else block.get("text", "")
+            for block in content
+            if isinstance(block, str) or isinstance(block, dict)
+        ]
+        return "".join(parts).strip()
+    return str(content).strip()
+
 _SUMMARIZER_SYSTEM_PROMPT: str = """You are a professional resume writer tasked with creating a concise executive summary.
 
 From the provided structured resume data, write a 3–5 sentence professional summary in third person.
@@ -29,4 +45,4 @@ Generate a professional summary paragraph (3–5 sentences, third person)."""
 
         messages = [SystemMessage(content=_SUMMARIZER_SYSTEM_PROMPT), HumanMessage(content=context)]
         response = self._llm.invoke(messages)
-        return str(response.content).strip()
+        return _extract_text(response.content)

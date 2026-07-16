@@ -8,6 +8,7 @@ import AnalysisPage from './pages/AnalysisPage';
 import RoadmapShell from './layouts/RoadmapShell';
 import RoadmapPage from './pages/RoadmapPage';
 import SettingsPage from './pages/SettingsPage';
+import WhatsAppPage from './pages/WhatsAppPage';
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/analysis" element={<AnalysisPage />} />
           <Route path="/roadmap" element={<RoadmapPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/whatsapp" element={<WhatsAppPage />} />
           {/* /roadmap/day/:dayNumber — daily answering flow (not yet built) */}
         </Route>
 

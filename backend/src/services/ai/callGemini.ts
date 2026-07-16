@@ -9,7 +9,7 @@ function getClient(): GoogleGenerativeAI {
   return _client;
 }
 
-const MODEL = () => process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const MODEL = () => process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
 
 /**
  * Thin Gemini wrapper used by every agent.
