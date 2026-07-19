@@ -35,7 +35,7 @@ export function dailyQuestionMessage(
     `*Question:*`,
     questionText,
     ``,
-    `Open PrepPilot to submit your answer and track your progress. 💪`,
+    `Open PrepPilot to submit your answer and track your progress: ${process.env.FRONTEND_ORIGIN || 'https://preppilot.com'} 💪`,
   ].join('\n');
 }
 
@@ -58,8 +58,9 @@ export function dailyBundleMessage(name: string, questions: BundleQuestion[]): s
     if (i < questions.length - 1) lines.push('');
   });
 
+  const appUrl = process.env.FRONTEND_ORIGIN || 'https://preppilot.com';
   lines.push('');
-  lines.push('📲 Open PrepPilot to submit your answers and track your progress.');
+  lines.push(`📲 Open PrepPilot to submit your answers and track your progress: ${appUrl}`);
 
   return lines.join('\n');
 }
@@ -90,8 +91,9 @@ export function dailyPracticeSetMessage(
     if (i < maxQuestions - 1) lines.push('');
   }
 
+  const appUrl = process.env.FRONTEND_ORIGIN || 'https://preppilot.com';
   lines.push('');
-  lines.push('📲 Open PrepPilot to submit your answers and track your progress.');
+  lines.push(`📲 Open PrepPilot to submit your answers and track your progress: ${appUrl}`);
 
   return lines.join('\n');
 }

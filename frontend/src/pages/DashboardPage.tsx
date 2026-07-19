@@ -114,7 +114,12 @@ export default function DashboardPage() {
         sessions_this_week: res.data!.sessions_this_week,
         today_question: res.data!.today_question,
       } : prev);
-      setChatMessages(prev => [...prev, { from: 'bot', text: 'Answer recorded! Great work. Move on to your next question when ready.' }]);
+      
+      const reply = res.data.feedback
+        ? `Score: ${res.data.ai_score}/10\n\n${res.data.feedback}`
+        : 'Answer recorded! Great work. Move on to your next question when ready.';
+
+      setChatMessages(prev => [...prev, { from: 'bot', text: reply }]);
     }
   };
 
@@ -360,7 +365,7 @@ export default function DashboardPage() {
             )}
             {chatMessages.map((msg, i) => (
               <div key={i} className={`flex ${msg.from === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                <div className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
                   msg.from === 'user'
                     ? 'bg-emerald-600 text-white rounded-br-md'
                     : 'bg-white border border-gray-200 text-gray-800 rounded-bl-md shadow-sm'

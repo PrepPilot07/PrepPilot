@@ -12,6 +12,7 @@ import {
   LogOut,
   Flame,
   FileText,
+  Menu,
 } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 import ThemeToggle from '../components/ThemeToggle';
@@ -58,6 +59,7 @@ export default function RoadmapShell() {
   const [roleTitle, setRoleTitle] = useState<string | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   useEffect(() => {
     if (!token) return;
@@ -82,7 +84,8 @@ export default function RoadmapShell() {
     <div className="flex h-screen bg-gray-50 overflow-hidden font-['Inter',sans-serif]">
 
       {/* ── Fixed Sidebar ──────────────────────────────────────────────────── */}
-      <aside className="w-[230px] shrink-0 flex flex-col h-screen bg-white border-r border-gray-200 overflow-y-auto">
+      <div className={`shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${sidebarOpen ? 'w-[230px]' : 'w-0'}`}>
+        <aside className="w-[230px] flex flex-col h-screen bg-white border-r border-gray-200 overflow-y-auto">
 
         {/* Logo */}
         <div className="flex items-center gap-2.5 px-4 py-5 border-b border-gray-100">
@@ -195,20 +198,30 @@ export default function RoadmapShell() {
             </div>
           )}
         </div>
-      </aside>
+        </aside>
+      </div>
 
       {/* ── Main content area ─────────────────────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0">
 
         {/* Top bar */}
         <header className="h-[58px] shrink-0 bg-white border-b border-gray-200 flex items-center justify-between px-6">
-          {/* Breadcrumb */}
-          <div className="flex items-center gap-1.5 text-sm text-gray-500">
-            <span className="font-medium text-gray-800">
-              {currentPath === '/dashboard' ? 'Dashboard' : currentPath === '/analysis' ? 'Analysis Report' : currentPath === '/upload' ? 'New Plan' : currentPath === '/settings' ? 'Settings' : currentPath === '/whatsapp' ? 'WhatsApp connection' : 'Your Roadmap'}
-            </span>
-            <span className="text-gray-300">|</span>
-            <span>{today}</span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="text-gray-500 hover:text-emerald-600 transition-colors"
+              aria-label="Toggle sidebar"
+            >
+              <Menu size={20} />
+            </button>
+            {/* Breadcrumb */}
+            <div className="flex items-center gap-1.5 text-sm text-gray-500 hidden sm:flex">
+              <span className="font-medium text-gray-800">
+                {currentPath === '/dashboard' ? 'Dashboard' : currentPath === '/analysis' ? 'Analysis Report' : currentPath === '/upload' ? 'New Plan' : currentPath === '/settings' ? 'Settings' : currentPath === '/whatsapp' ? 'WhatsApp connection' : 'Your Roadmap'}
+              </span>
+              <span className="text-gray-300">|</span>
+              <span>{today}</span>
+            </div>
           </div>
           {/* Action icons */}
           <div className="flex items-center gap-2">

@@ -17,7 +17,7 @@ interface AboutModalProps {
 const STEPS: { icon: React.ReactNode; text: string }[] = [
   { icon: <Upload size={14} />, text: 'Upload your resume and paste the job description you’re targeting.' },
   { icon: <Map size={14} />, text: 'AI agents analyze your profile and build a personalized day-by-day roadmap around your skill gaps.' },
-  { icon: <MessageSquare size={14} />, text: 'Each day you get a targeted interview question — delivered over WhatsApp (coming soon).' },
+  { icon: <MessageSquare size={14} />, text: 'Each day you get a targeted interview question — delivered over WhatsApp or right on your dashboard.' },
   { icon: <Sparkles size={14} />, text: 'Reply with your answer and get an AI score plus specific feedback.' },
   { icon: <TrendingUp size={14} />, text: 'Your Readiness Score moves as you actually practice, so you know where you stand.' },
 ];

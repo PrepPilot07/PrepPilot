@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import pool from '../db/pool';
 import { verifyToken, AuthRequest } from '../middleware/auth';
+import { scoreAnswer } from '../services/answerScoring';
 
 const router = Router();
 
@@ -113,12 +114,18 @@ router.get('/', verifyToken, async (req: AuthRequest, res: Response): Promise<vo
       daysUntilInterview = Math.max(0, Math.ceil((interviewDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
     }
 
-    // ── Fetch all responses for this user ───────────────────────────────────
-    const responsesRes = await pool.query(
-      `SELECT id, question_id, submitted_at FROM responses WHERE user_id = $1 ORDER BY submitted_at ASC`,
-      [userId]
-    );
-    const allResponses = responsesRes.rows as { id: string; question_id: string; submitted_at: string }[];
+    // ── Fetch all completed days for this user ──────────────────────────────
+    let allResponses: { id: string; question_id: string; submitted_at: string }[] = [];
+    if (roadmap) {
+      const responsesRes = await pool.query(
+        `SELECT id, id as question_id, completed_at as submitted_at 
+         FROM questions 
+         WHERE roadmap_id = $1 AND status = 'completed' AND completed_at IS NOT NULL 
+         ORDER BY completed_at ASC`,
+        [roadmap.id]
+      );
+      allResponses = responsesRes.rows as { id: string; question_id: string; submitted_at: string }[];
+    }
     const totalAnswered = allResponses.length;
 
     // ── Readiness score: base + 2 per answered question, cap 100 ────────────
@@ -145,46 +152,54 @@ router.get('/', verifyToken, async (req: AuthRequest, res: Response): Promise<vo
     // ── Today's question ────────────────────────────────────────────────────
     let todayQuestion: Record<string, unknown> | null = null;
     if (roadmap) {
-      // Find the next unanswered question (lowest day_number without a response)
-      const answeredQuestionIds = new Set(allResponses.map(r => r.question_id));
       const questionsRes = await pool.query(
-        `SELECT id, day_number, topic, question_text, learning_goal, difficulty, focus_skill
+        `SELECT id, day_number, topic, question_text, learning_goal, difficulty, focus_skill, status
          FROM questions WHERE roadmap_id = $1 ORDER BY day_number ASC`,
         [roadmap.id]
       );
       const questions = questionsRes.rows;
 
-      for (const q of questions) {
-        const alreadyAnswered = answeredQuestionIds.has(q.id);
-        // Today's question: the first unanswered, OR the most recent one answered today
-        if (!alreadyAnswered) {
-          todayQuestion = {
-            id: q.id,
-            day_number: q.day_number,
-            topic: q.topic,
-            question_text: q.question_text,
-            learning_goal: q.learning_goal,
-            difficulty: q.difficulty,
-            focus_skill: q.focus_skill,
-            already_answered: false,
-          };
-          break;
-        }
-      }
-
-      // If all are answered, show the last one as done
-      if (!todayQuestion && questions.length > 0) {
-        const last = questions[questions.length - 1];
+      const todayQ = questions.find(q => q.status === 'today');
+      
+      if (todayQ) {
         todayQuestion = {
-          id: last.id,
-          day_number: last.day_number,
-          topic: last.topic,
-          question_text: last.question_text,
-          learning_goal: last.learning_goal,
-          difficulty: last.difficulty,
-          focus_skill: last.focus_skill,
-          already_answered: true,
+          id: todayQ.id,
+          day_number: todayQ.day_number,
+          topic: todayQ.topic,
+          question_text: todayQ.question_text,
+          learning_goal: todayQ.learning_goal,
+          difficulty: todayQ.difficulty,
+          focus_skill: todayQ.focus_skill,
+          already_answered: false,
         };
+      } else if (questions.length > 0) {
+        // Find the last completed
+        const lastCompleted = questions.slice().reverse().find(q => q.status === 'completed');
+        if (lastCompleted) {
+          todayQuestion = {
+            id: lastCompleted.id,
+            day_number: lastCompleted.day_number,
+            topic: lastCompleted.topic,
+            question_text: lastCompleted.question_text,
+            learning_goal: lastCompleted.learning_goal,
+            difficulty: lastCompleted.difficulty,
+            focus_skill: lastCompleted.focus_skill,
+            already_answered: true,
+          };
+        } else {
+           // fallback
+           const first = questions[0];
+           todayQuestion = {
+             id: first.id,
+             day_number: first.day_number,
+             topic: first.topic,
+             question_text: first.question_text,
+             learning_goal: first.learning_goal,
+             difficulty: first.difficulty,
+             focus_skill: first.focus_skill,
+             already_answered: false,
+           };
+        }
       }
     }
 
@@ -313,17 +328,38 @@ router.post('/practice-answer', verifyToken, async (req: AuthRequest, res: Respo
 
     const question = questionRes.rows[0];
 
-    // Insert response
+    // Insert response (legacy compatibility)
     await pool.query(
       `INSERT INTO responses (user_id, question_id, roadmap_id, answer_text)
        VALUES ($1, $2, $3, $4)`,
       [userId, question_id, question.roadmap_id, answer_text.trim()]
     );
 
-    // Compute updated stats
+    // Update questions status
+    await pool.query(
+      `UPDATE questions
+       SET status = 'completed', completed_at = NOW()
+       WHERE id = $1 AND status != 'completed'`,
+      [question_id]
+    );
+
+    // Unlock next day
+    await pool.query(
+      `UPDATE questions
+       SET status = 'today'
+       WHERE id = (
+         SELECT id FROM questions
+         WHERE roadmap_id = $1 AND day_number > $2 AND status = 'locked'
+         ORDER BY day_number ASC
+         LIMIT 1
+       )`,
+      [question.roadmap_id, question.day_number]
+    );
+
+    // Compute updated stats using questions table
     const responsesRes = await pool.query(
-      `SELECT submitted_at FROM responses WHERE user_id = $1`,
-      [userId]
+      `SELECT completed_at as submitted_at FROM questions WHERE roadmap_id = $1 AND status = 'completed' AND completed_at IS NOT NULL`,
+      [question.roadmap_id]
     );
     const totalAnswered = responsesRes.rows.length;
 
@@ -351,57 +387,56 @@ router.post('/practice-answer', verifyToken, async (req: AuthRequest, res: Respo
     const distinctDays = new Set(weekResponses.map(r => new Date(r.submitted_at).toDateString()));
     const sessionsThisWeek = Math.min(5, distinctDays.size);
 
-    // Find next unanswered question
-    const answeredIds = await pool.query(
-      `SELECT DISTINCT question_id FROM responses WHERE user_id = $1`,
-      [userId]
-    );
-    const answeredSet = new Set(answeredIds.rows.map(r => r.question_id));
-
+    // Find todayQuestion
     const allQuestions = await pool.query(
-      `SELECT id, day_number, topic, question_text, learning_goal, difficulty, focus_skill
+      `SELECT id, day_number, topic, question_text, learning_goal, difficulty, focus_skill, status
        FROM questions WHERE roadmap_id = $1 ORDER BY day_number ASC`,
       [question.roadmap_id]
     );
 
     let todayQuestion: Record<string, unknown> | null = null;
-    for (const q of allQuestions.rows) {
-      if (!answeredSet.has(q.id)) {
+    const todayQ = allQuestions.rows.find(q => q.status === 'today');
+    if (todayQ) {
+      todayQuestion = {
+        id: todayQ.id,
+        day_number: todayQ.day_number,
+        topic: todayQ.topic,
+        question_text: todayQ.question_text,
+        learning_goal: todayQ.learning_goal,
+        difficulty: todayQ.difficulty,
+        focus_skill: todayQ.focus_skill,
+        already_answered: false,
+      };
+    } else if (allQuestions.rows.length > 0) {
+      const lastCompleted = allQuestions.rows.slice().reverse().find(q => q.status === 'completed');
+      if (lastCompleted) {
         todayQuestion = {
-          id: q.id,
-          day_number: q.day_number,
-          topic: q.topic,
-          question_text: q.question_text,
-          learning_goal: q.learning_goal,
-          difficulty: q.difficulty,
-          focus_skill: q.focus_skill,
-          already_answered: false,
-        };
-        break;
-      }
-    }
-
-    if (!todayQuestion) {
-      const last = allQuestions.rows[allQuestions.rows.length - 1];
-      if (last) {
-        todayQuestion = {
-          id: last.id,
-          day_number: last.day_number,
-          topic: last.topic,
-          question_text: last.question_text,
-          learning_goal: last.learning_goal,
-          difficulty: last.difficulty,
-          focus_skill: last.focus_skill,
+          id: lastCompleted.id,
+          day_number: lastCompleted.day_number,
+          topic: lastCompleted.topic,
+          question_text: lastCompleted.question_text,
+          learning_goal: lastCompleted.learning_goal,
+          difficulty: lastCompleted.difficulty,
+          focus_skill: lastCompleted.focus_skill,
           already_answered: true,
         };
       }
     }
+
+    // ── Generate AI score and feedback ──────────────────────────────────────
+    const { score, feedback } = await scoreAnswer({
+      questionText: question.question_text,
+      difficulty: question.difficulty,
+      answerText: answer_text.trim(),
+    });
 
     res.json({
       success: true,
       readiness_score: readinessScore,
       sessions_this_week: sessionsThisWeek,
       today_question: todayQuestion,
+      feedback,
+      ai_score: score,
     });
   } catch (err) {
     console.error('[dashboard] POST practice-answer error:', err);

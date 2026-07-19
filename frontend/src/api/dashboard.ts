@@ -69,6 +69,8 @@ export interface PracticeAnswerResponse {
   readiness_score: number;
   sessions_this_week: number;
   today_question: TodayQuestion | null;
+  feedback?: string;
+  ai_score?: number;
 }
 
 // ── API calls ───────────────────────────────────────────────────────────────
