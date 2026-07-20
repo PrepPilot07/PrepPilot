@@ -58,4 +58,28 @@ export const authApi = {
     apiFetch<UserProfile>('/profile/me', {
       headers: { Authorization: `Bearer ${token}` },
     }),
+
+  verifyOTP: (email: string, otp: string) =>
+    apiFetch<AuthPayload>('/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp }),
+    }),
+
+  requestSignupOTP: (email: string) =>
+    apiFetch<{ message: string }>('/auth/request-signup-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  verifySignupOTP: (email: string, otp: string) =>
+    apiFetch<{ message: string }>('/auth/verify-signup-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp }),
+    }),
+
+  resendOTP: (email: string) =>
+    apiFetch<{ message: string }>('/auth/resend-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
 };

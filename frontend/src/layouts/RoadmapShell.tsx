@@ -85,12 +85,21 @@ export default function RoadmapShell() {
     <div className="flex h-screen bg-gray-50 overflow-hidden font-['Inter',sans-serif]">
       <Toaster position="bottom-right" />
 
+      {/* Fixed floating toggle button visible on all pages inside the shell */}
+      <button
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        className={`fixed top-4 left-4 z-[60] p-2 rounded-lg transition-all duration-300 shadow-md border border-gray-200 ${sidebarOpen ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-white text-gray-500 hover:text-emerald-600'}`}
+        aria-label="Toggle sidebar"
+      >
+        <Menu size={20} />
+      </button>
+
       {/* ── Fixed Sidebar ──────────────────────────────────────────────────── */}
       <div className={`shrink-0 transition-all duration-300 ease-in-out overflow-hidden ${sidebarOpen ? 'w-[230px]' : 'w-0'}`}>
         <aside className="w-[230px] flex flex-col h-screen bg-white border-r border-gray-200 overflow-y-auto">
 
         {/* Logo */}
-        <div className="flex items-center gap-2.5 px-4 py-5 border-b border-gray-100">
+        <div className="flex items-center gap-2.5 px-4 py-5 border-b border-gray-100 pl-16">
           <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center shadow-sm">
             <span className="text-white font-bold text-sm">P</span>
           </div>
@@ -207,15 +216,8 @@ export default function RoadmapShell() {
       <div className="flex-1 flex flex-col min-w-0">
 
         {/* Top bar */}
-        <header className="h-[58px] shrink-0 bg-white border-b border-gray-200 flex items-center justify-between px-6">
+        <header className="h-[58px] shrink-0 bg-white border-b border-gray-200 flex items-center justify-between px-6 pl-16">
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="text-gray-500 hover:text-emerald-600 transition-colors"
-              aria-label="Toggle sidebar"
-            >
-              <Menu size={20} />
-            </button>
             {/* Breadcrumb */}
             <div className="flex items-center gap-1.5 text-sm text-gray-500 hidden sm:flex">
               <span className="font-medium text-gray-800">

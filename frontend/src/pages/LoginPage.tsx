@@ -7,6 +7,9 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showOtp, setShowOtp] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -21,7 +24,10 @@ export default function LoginPage() {
     setLoading(false);
 
     if (result.error || !result.data) {
-      if (result.status === 401) {
+      if (result.status === 403) {
+        setShowOtp(true);
+        setError('Please verify your email address to continue.');
+      } else if (result.status === 401) {
         setError('Incorrect email or password. Please try again.');
       } else if (result.status === 400) {
         setError(result.error || 'Please fill in all fields.');
@@ -33,6 +39,42 @@ export default function LoginPage() {
 
     login(result.data.token, result.data.user);
     navigate('/dashboard');
+  };
+
+  const handleVerifyOtp = async (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    const result = await authApi.verifyOTP(email, otp);
+    setLoading(false);
+    if (result.error || !result.data) {
+      setError(result.error || 'Invalid verification code');
+      return;
+    }
+    login(result.data.token, result.data.user);
+    navigate('/dashboard');
+  };
+
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0) return;
+    setError('');
+    setLoading(true);
+    const result = await authApi.resendOTP(email);
+    setLoading(false);
+    if (result.error) {
+      setError(result.error || 'Failed to resend code');
+    } else {
+      setResendCooldown(60);
+      const timer = setInterval(() => {
+        setResendCooldown(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
   };
 
   return (
@@ -121,15 +163,60 @@ export default function LoginPage() {
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-[1.75rem] font-extrabold text-gray-900 tracking-tight">
-              Welcome back
+              {showOtp ? 'Verify your email' : 'Welcome back'}
             </h1>
             <p className="text-gray-500 text-[15px] mt-2">
-              Sign in to continue your prep journey.
+              {showOtp ? `We sent a 6-digit code to ${email}` : 'Sign in to continue your prep journey.'}
             </p>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5" id="login-form" noValidate>
+          {showOtp ? (
+            <form onSubmit={handleVerifyOtp} className="space-y-4" noValidate>
+              <div>
+                <label className="block text-[13px] font-semibold text-gray-700 mb-2">
+                  Verification Code
+                </label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  className="w-full px-4 py-3.5 rounded-xl bg-gray-50 border border-gray-200 text-black font-extrabold text-center text-xl tracking-[0.5em] placeholder-gray-300 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all"
+                  placeholder="------"
+                  value={otp}
+                  onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
+                  required
+                  autoFocus
+                />
+              </div>
+              
+              {/* Error */}
+              {error && (
+                <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-100 rounded-xl" role="alert">
+                  <span className="text-sm text-red-700">{error}</span>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading || otp.length !== 6}
+                className="w-full py-3.5 px-6 rounded-xl font-semibold text-[15px] text-white bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50 transition-all shadow-lg shadow-emerald-600/20"
+              >
+                {loading ? 'Verifying...' : 'Verify Email'}
+              </button>
+
+              <div className="text-center mt-4">
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={resendCooldown > 0 || loading}
+                  className="text-sm text-emerald-600 hover:text-emerald-700 font-medium disabled:text-gray-400"
+                >
+                  {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend code'}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-5" id="login-form" noValidate>
             {/* Email */}
             <div>
               <label htmlFor="login-email" className="block text-[13px] font-semibold text-gray-700 mb-2">
@@ -229,6 +316,7 @@ export default function LoginPage() {
               ) : 'Sign in'}
             </button>
           </form>
+          )}
 
           {/* Divider */}
           <div className="flex items-center gap-4 my-7">

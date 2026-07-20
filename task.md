@@ -1,0 +1,4 @@
+- `[x]` 1. Fetch Public IP and Build Frontend
+- `[x]` 2. Install Nginx
+- `[x]` 3. Configure Nginx and Restart
+- `[x]` 4. Open Port 80 in Security Group
