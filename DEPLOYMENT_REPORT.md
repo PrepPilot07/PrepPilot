@@ -9,6 +9,7 @@
 
 ## Application Status
 - **Running PM2 Processes:**
+  - `frontend` (Mode: fork, Status: online)
   - `backend` (Mode: fork, Status: online)
   - `python-api` (Mode: fork, Status: online)
 - **Listening Ports:**
@@ -39,5 +40,4 @@
 - **PM2 Persistence:** The `pm2 save` and `pm2 startup` systemd scripts have been registered. The servers will automatically boot after any system reboots.
 
 ## Remaining Manual Tasks
-- [ ] **Connect Vercel:** Deploy your frontend to Vercel and ensure the `FRONTEND_ORIGIN` environment variables match.
-- [ ] **Test API Integration:** Ensure the frontend can successfully communicate with the newly deployed EC2 public IP or domain name.
+- [ ] **Test API Integration:** Ensure the frontend can successfully communicate with the backend and Python API.
