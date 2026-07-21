@@ -239,7 +239,7 @@ export default function LoginPage() {
                 <input
                   id="login-email"
                   type="email"
-                  className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-gray-50 border border-gray-300 text-gray-900 text-sm placeholder-gray-400 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 focus:shadow-[0_0_20px_-4px_rgba(16,185,129,0.45)] transition-all duration-200"
+                  className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-gray-50 border border-gray-300 text-gray-900 text-sm placeholder-gray-400 outline-none focus:bg-gray-100 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 focus:shadow-[0_0_20px_-4px_rgba(16,185,129,0.45)] transition-all duration-200"
                   placeholder="you@email.com"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
@@ -264,7 +264,7 @@ export default function LoginPage() {
                 <input
                   id="login-password"
                   type={showPassword ? 'text' : 'password'}
-                  className="w-full pl-11 pr-12 py-3.5 rounded-xl bg-gray-50 border border-gray-300 text-gray-900 text-sm placeholder-gray-400 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 focus:shadow-[0_0_20px_-4px_rgba(16,185,129,0.45)] transition-all duration-200"
+                  className="w-full pl-11 pr-12 py-3.5 rounded-xl bg-gray-50 border border-gray-300 text-gray-900 text-sm placeholder-gray-400 outline-none focus:bg-gray-100 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 focus:shadow-[0_0_20px_-4px_rgba(16,185,129,0.45)] transition-all duration-200"
                   placeholder="Enter your password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
