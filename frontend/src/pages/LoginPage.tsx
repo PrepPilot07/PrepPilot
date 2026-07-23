@@ -78,6 +78,7 @@ export default function LoginPage() {
   };
 
   return (
+    <div className="dark">
     <div className="min-h-screen flex font-['Inter',sans-serif] bg-white">
 
       {/* ── Left: Branding panel ────────────────────────────────────────────── */}
@@ -86,17 +87,18 @@ export default function LoginPage() {
         <div className="absolute inset-0">
           <div className="absolute top-0 left-0 w-full h-full opacity-[0.07]"
             style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '32px 32px' }} />
-          <div className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full bg-white/10 blur-3xl" />
-          <div className="absolute -bottom-32 -left-32 w-[400px] h-[400px] rounded-full bg-teal-400/20 blur-3xl" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full border border-white/10" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full border border-white/5" />
+          <div className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full bg-white/10 blur-3xl login-orb" />
+          <div className="absolute -bottom-32 -left-32 w-[400px] h-[400px] rounded-full bg-teal-400/20 blur-3xl login-orb login-orb-delay" />
         </div>
 
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
           {/* Logo */}
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/20">
-              <span className="text-white font-black text-lg">P</span>
+            <div className="relative login-badge-in">
+              <div className="absolute inset-0 rounded-2xl bg-emerald-300/40 blur-lg scale-125 -z-10" aria-hidden="true" />
+              <div className="relative w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center border border-white/20">
+                <span className="text-white font-black text-lg">P</span>
+              </div>
             </div>
             <span className="text-white/90 font-bold text-xl tracking-tight">PrepPilot</span>
           </div>
@@ -104,11 +106,12 @@ export default function LoginPage() {
           {/* Hero content */}
           <div className="max-w-md">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 mb-8">
-              <span className="w-2 h-2 rounded-full bg-emerald-200 animate-pulse" />
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
               <span className="text-white/90 text-xs font-medium tracking-wide">AI-Powered Interview Coach</span>
             </div>
-            <h1 className="text-[2.75rem] font-extrabold text-white leading-[1.1] mb-5 tracking-tight">
-              Land the role<br />you deserve.
+            <h1 className="text-[2.75rem] font-extrabold leading-[1.1] mb-5 tracking-tight login-headline-sweep">
+              <span className="block login-line-in" style={{ animationDelay: '40ms' }}>Land the role</span>
+              <span className="block login-line-in" style={{ animationDelay: '150ms' }}>you deserve.</span>
             </h1>
             <p className="text-white/70 text-[15px] leading-relaxed max-w-sm">
               One sharp question a day. Honest feedback. A readiness score that moves as you improve. Your personal interview mentor, always in your pocket.
@@ -118,7 +121,11 @@ export default function LoginPage() {
             <div className="mt-10 flex items-center gap-4">
               <div className="flex -space-x-2.5">
                 {['#34d399','#6ee7b7','#a7f3d0','#d1fae5'].map((bg, i) => (
-                  <div key={i} className="w-9 h-9 rounded-full border-2 border-emerald-600 flex items-center justify-center text-[10px] font-bold text-emerald-900" style={{ backgroundColor: bg }}>
+                  <div
+                    key={i}
+                    className="w-9 h-9 rounded-full border-2 border-emerald-600 flex items-center justify-center text-[10px] font-bold login-avatar-in"
+                    style={{ backgroundColor: bg, color: '#065f46', animationDelay: `${380 + i * 70}ms` }}
+                  >
                     {['SR','RA','GE','AK'][i]}
                   </div>
                 ))}
@@ -131,7 +138,7 @@ export default function LoginPage() {
           </div>
 
           {/* Bottom quote */}
-          <div className="flex items-start gap-3 max-w-md">
+          <div className="flex items-start gap-3 max-w-md bg-white/10 backdrop-blur-md border border-white/15 rounded-2xl px-5 py-4">
             <div className="w-1 h-12 rounded-full bg-white/30 shrink-0" />
             <div>
               <p className="text-white/60 text-sm italic leading-relaxed">
@@ -147,15 +154,15 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center p-6 sm:p-8 relative">
         {/* Subtle background */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-20 right-20 w-72 h-72 bg-emerald-50 rounded-full blur-3xl opacity-60" />
-          <div className="absolute bottom-20 left-20 w-56 h-56 bg-teal-50 rounded-full blur-3xl opacity-40" />
+          <div className="absolute top-20 right-20 w-72 h-72 bg-emerald-500/10 rounded-full blur-3xl login-orb-soft" />
+          <div className="absolute bottom-20 left-20 w-56 h-56 bg-teal-500/[0.08] rounded-full blur-3xl login-orb-soft login-orb-soft-delay" />
         </div>
 
         <div className="relative w-full max-w-[420px]">
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center justify-center gap-2.5 mb-10">
             <div className="w-10 h-10 rounded-2xl bg-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <span className="text-white font-black text-lg">P</span>
+              <span className="font-black text-lg" style={{ color: '#04140f' }}>P</span>
             </div>
             <span className="text-gray-900 font-bold text-xl tracking-tight">PrepPilot</span>
           </div>
@@ -180,7 +187,7 @@ export default function LoginPage() {
                 <input
                   type="text"
                   maxLength={6}
-                  className="w-full px-4 py-3.5 rounded-xl bg-gray-50 border border-gray-200 text-black font-extrabold text-center text-xl tracking-[0.5em] placeholder-gray-300 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all"
+                  className="w-full px-4 py-3.5 rounded-xl bg-gray-50 border border-gray-300 text-gray-900 font-extrabold text-center text-xl tracking-[0.5em] placeholder-gray-500 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 focus:shadow-[0_0_20px_-4px_rgba(16,185,129,0.45)] transition-all"
                   placeholder="------"
                   value={otp}
                   onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
@@ -199,7 +206,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={loading || otp.length !== 6}
-                className="w-full py-3.5 px-6 rounded-xl font-semibold text-[15px] text-white bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50 transition-all shadow-lg shadow-emerald-600/20"
+                className="w-full py-3.5 px-6 rounded-xl font-semibold text-[15px] text-white bg-emerald-600 hover:bg-emerald-700 hover:scale-[1.015] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 transition-all login-submit-glow"
               >
                 {loading ? 'Verifying...' : 'Verify Email'}
               </button>
@@ -232,7 +239,8 @@ export default function LoginPage() {
                 <input
                   id="login-email"
                   type="email"
-                  className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-sm placeholder-gray-400 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 focus:text-black transition-all duration-200"
+                  maxLength={254}
+                  className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-gray-50 border border-gray-300 text-gray-900 text-sm placeholder-gray-400 outline-none focus:bg-gray-100 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 focus:shadow-[0_0_20px_-4px_rgba(16,185,129,0.45)] transition-all duration-200"
                   placeholder="you@email.com"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
@@ -244,9 +252,14 @@ export default function LoginPage() {
 
             {/* Password */}
             <div>
-              <label htmlFor="login-password" className="block text-[13px] font-semibold text-gray-700 mb-2">
-                Password
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label htmlFor="login-password" className="block text-[13px] font-semibold text-gray-700">
+                  Password
+                </label>
+                <Link to="/forgot-password" className="text-[13px] text-emerald-600 hover:text-emerald-700 font-medium transition-colors">
+                  Forgot password?
+                </Link>
+              </div>
               <div className="relative">
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
@@ -257,7 +270,7 @@ export default function LoginPage() {
                 <input
                   id="login-password"
                   type={showPassword ? 'text' : 'password'}
-                  className="w-full pl-11 pr-12 py-3.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-sm placeholder-gray-400 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 focus:text-black transition-all duration-200"
+                  className="w-full pl-11 pr-12 py-3.5 rounded-xl bg-gray-50 border border-gray-300 text-gray-900 text-sm placeholder-gray-400 outline-none focus:bg-gray-100 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 focus:shadow-[0_0_20px_-4px_rgba(16,185,129,0.45)] transition-all duration-200"
                   placeholder="Enter your password"
                   value={password}
                   onChange={e => setPassword(e.target.value)}
@@ -303,7 +316,7 @@ export default function LoginPage() {
               id="login-submit"
               type="submit"
               disabled={loading}
-              className="w-full py-3.5 px-6 rounded-xl font-semibold text-[15px] text-white bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg shadow-emerald-600/20 focus:outline-none focus:ring-4 focus:ring-emerald-500/20"
+              className="w-full py-3.5 px-6 rounded-xl font-semibold text-[15px] text-white bg-emerald-600 hover:bg-emerald-700 hover:scale-[1.015] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 transition-all duration-200 login-submit-glow focus:outline-none focus:ring-4 focus:ring-emerald-500/20"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2.5">
@@ -320,9 +333,9 @@ export default function LoginPage() {
 
           {/* Divider */}
           <div className="flex items-center gap-4 my-7">
-            <div className="flex-1 h-px bg-gray-200" />
+            <div className="flex-1 h-px bg-gray-300" />
             <span className="text-xs text-gray-400 font-medium">or</span>
-            <div className="flex-1 h-px bg-gray-200" />
+            <div className="flex-1 h-px bg-gray-300" />
           </div>
 
           {/* Sign up link */}
@@ -340,6 +353,7 @@ export default function LoginPage() {
           </p>
         </div>
       </div>
+    </div>
     </div>
   );
 }

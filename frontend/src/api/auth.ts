@@ -1,4 +1,4 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_BASE = import.meta.env.VITE_API_URL;
 
 interface ApiResponse<T> {
   data?: T;
@@ -11,21 +11,25 @@ async function apiFetch<T>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   const { headers, ...restOptions } = options;
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...restOptions,
-    headers: {
-      'Content-Type': 'application/json',
-      ...headers,
-    },
-  });
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      ...restOptions,
+      headers: {
+        'Content-Type': 'application/json',
+        ...headers,
+      },
+    });
 
-  const body = await res.json().catch(() => ({}));
+    const body = await res.json().catch(() => ({}));
 
-  if (!res.ok) {
-    return { status: res.status, error: body.error || 'An unexpected error occurred' };
+    if (!res.ok) {
+      return { status: res.status, error: body.error || 'An unexpected error occurred' };
+    }
+
+    return { status: res.status, data: body as T };
+  } catch (error: any) {
+    return { status: 500, error: 'Network error or server unreachable.' };
   }
-
-  return { status: res.status, data: body as T };
 }
 
 export interface AuthPayload {
@@ -81,5 +85,24 @@ export const authApi = {
     apiFetch<{ message: string }>('/auth/resend-otp', {
       method: 'POST',
       body: JSON.stringify({ email }),
+    }),
+
+  // ── Forgot / reset password ──
+  forgotPassword: (email: string) =>
+    apiFetch<{ message: string }>('/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
+  verifyResetOTP: (email: string, otp: string) =>
+    apiFetch<{ message: string }>('/auth/verify-reset-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp }),
+    }),
+
+  resetPassword: (email: string, otp: string, newPassword: string) =>
+    apiFetch<{ success: boolean; message: string }>('/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ email, otp, new_password: newPassword }),
     }),
 };

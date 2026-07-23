@@ -16,5 +16,13 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    proxy: {
+      // Forward /api/* requests to the local backend during development.
+      // This avoids CORS issues between localhost:5173 (Vite) and localhost:3000 (backend).
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+    },
   },
 })

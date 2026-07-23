@@ -3,14 +3,24 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import pool from '../db/pool';
-import { sendOTPVerificationEmail } from '../services/email';
+import { sendOTPVerificationEmail, sendPasswordResetEmail } from '../services/email';
+import { validateEmail, validatePassword, normalizeEmail } from '../utils/validation';
 
 const router = Router();
 
-// ─── Email / password validators ────────────────────────────────────────────
+// ─── OTP config ──────────────────────────────────────────────────────────────
 
-function isValidEmail(email: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const OTP_EXPIRY_MS = 15 * 60 * 1000; // codes are valid for 15 minutes
+const MAX_OTP_ATTEMPTS = 5; // wrong guesses before a code is locked
+const RESEND_COOLDOWN_MS = 30 * 1000; // min gap between reset emails per address
+
+function generateOtp(): string {
+  // randomInt's upper bound is exclusive, so this yields 100000–999999.
+  return crypto.randomInt(100000, 1000000).toString();
+}
+
+function hashOtp(otp: string): string {
+  return crypto.createHash('sha256').update(otp).digest('hex');
 }
 
 function signToken(userId: string): string {
@@ -25,13 +35,13 @@ function signToken(userId: string): string {
 
 // Step 1: Request Signup OTP
 router.post('/request-signup-otp', async (req: Request, res: Response): Promise<void> => {
-  const { email } = req.body;
-  if (!email || !isValidEmail(email)) {
-    res.status(400).json({ error: 'Valid email is required' });
+  const emailCheck = validateEmail(req.body?.email);
+  if (!emailCheck.valid) {
+    res.status(400).json({ error: emailCheck.error });
     return;
   }
 
-  const cleanEmail = email.toLowerCase().trim();
+  const cleanEmail = normalizeEmail(req.body.email);
 
   try {
     // 1. Check if email already exists in users table
@@ -114,18 +124,20 @@ router.post('/verify-signup-otp', async (req: Request, res: Response): Promise<v
 
 // Step 3: Complete Signup
 router.post('/signup', async (req: Request, res: Response): Promise<void> => {
-  const { email, password, name } = req.body;
+  const { email, password, name } = req.body ?? {};
 
-  if (!email || !password) {
-    res.status(400).json({ error: 'Email and password are required' });
+  const emailCheck = validateEmail(email);
+  if (!emailCheck.valid) {
+    res.status(400).json({ error: emailCheck.error });
     return;
   }
-  if (password.length < 8) {
-    res.status(400).json({ error: 'Password must be at least 8 characters' });
+  const passwordCheck = validatePassword(password);
+  if (!passwordCheck.valid) {
+    res.status(400).json({ error: passwordCheck.error });
     return;
   }
 
-  const cleanEmail = email.toLowerCase().trim();
+  const cleanEmail = normalizeEmail(email);
 
   try {
     // 1. Verify that the email is actually verified in email_verifications
@@ -308,6 +320,223 @@ router.post('/resend-otp', async (req: Request, res: Response): Promise<void> =>
     res.status(404).json({ error: 'Account not found' });
   } catch (err) {
     console.error('Resend OTP error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ─── FORGOT PASSWORD ──────────────────────────────────────────────────────────
+//
+// Three steps mirror the signup wizard:
+//   1. POST /auth/forgot-password  → email a reset code
+//   2. POST /auth/verify-reset-otp → confirm the code (UX gate)
+//   3. POST /auth/reset-password   → set the new password (re-checks the code)
+//
+// The request step never reveals whether an account exists (no user
+// enumeration); every failure path returns the same generic message. Codes are
+// stored hashed, expire in 15 minutes, and lock after MAX_OTP_ATTEMPTS wrong
+// guesses so the 6-digit space can't be brute-forced.
+
+// Step 1: Request a password reset code
+router.post('/forgot-password', async (req: Request, res: Response): Promise<void> => {
+  const emailCheck = validateEmail(req.body?.email);
+  if (!emailCheck.valid) {
+    res.status(400).json({ error: emailCheck.error });
+    return;
+  }
+
+  const cleanEmail = normalizeEmail(req.body.email);
+  // Same response whether or not the account exists — avoids leaking which
+  // emails are registered.
+  const genericMessage =
+    'If an account exists for that email, a password reset code has been sent.';
+
+  try {
+    const userRes = await pool.query('SELECT id FROM users WHERE email = $1', [cleanEmail]);
+    if (userRes.rows.length === 0) {
+      res.status(200).json({ message: genericMessage });
+      return;
+    }
+
+    // Throttle repeat sends to the same address (defends against email bombing).
+    const existing = await pool.query(
+      'SELECT last_sent_at FROM password_resets WHERE email = $1',
+      [cleanEmail]
+    );
+    if (existing.rows.length > 0) {
+      const lastSent = new Date(existing.rows[0].last_sent_at).getTime();
+      if (Date.now() - lastSent < RESEND_COOLDOWN_MS) {
+        res.status(200).json({ message: genericMessage });
+        return;
+      }
+    }
+
+    const otpCode = generateOtp();
+    const otpExpiresAt = new Date(Date.now() + OTP_EXPIRY_MS);
+
+    await pool.query(
+      `INSERT INTO password_resets (email, otp_hash, otp_expires_at, attempts, verified, last_sent_at)
+       VALUES ($1, $2, $3, 0, FALSE, NOW())
+       ON CONFLICT (email) DO UPDATE
+       SET otp_hash = EXCLUDED.otp_hash,
+           otp_expires_at = EXCLUDED.otp_expires_at,
+           attempts = 0,
+           verified = FALSE,
+           last_sent_at = NOW()`,
+      [cleanEmail, hashOtp(otpCode), otpExpiresAt]
+    );
+
+    // A transport failure must not reveal that the account exists, so log it
+    // and still return the generic success response.
+    try {
+      await sendPasswordResetEmail(cleanEmail, otpCode);
+    } catch (mailErr) {
+      console.error('Failed to send password reset email:', mailErr);
+    }
+
+    res.status(200).json({ message: genericMessage });
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Step 2: Verify the reset code
+router.post('/verify-reset-otp', async (req: Request, res: Response): Promise<void> => {
+  const { email, otp } = req.body ?? {};
+  const emailCheck = validateEmail(email);
+  if (!emailCheck.valid || typeof otp !== 'string' || !otp.trim()) {
+    res.status(400).json({ error: 'Email and verification code are required' });
+    return;
+  }
+
+  const cleanEmail = normalizeEmail(email);
+
+  try {
+    const result = await pool.query(
+      'SELECT otp_hash, otp_expires_at, attempts FROM password_resets WHERE email = $1',
+      [cleanEmail]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(400).json({ error: 'Invalid or expired verification code. Please request a new one.' });
+      return;
+    }
+
+    const record = result.rows[0];
+
+    if (record.attempts >= MAX_OTP_ATTEMPTS) {
+      res.status(429).json({ error: 'Too many incorrect attempts. Please request a new code.' });
+      return;
+    }
+
+    if (new Date() > new Date(record.otp_expires_at)) {
+      res.status(400).json({ error: 'Verification code has expired. Please request a new one.' });
+      return;
+    }
+
+    if (record.otp_hash !== hashOtp(otp.trim())) {
+      await pool.query('UPDATE password_resets SET attempts = attempts + 1 WHERE email = $1', [cleanEmail]);
+      const remaining = MAX_OTP_ATTEMPTS - (record.attempts + 1);
+      res.status(401).json({
+        error:
+          remaining > 0
+            ? `Invalid verification code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`
+            : 'Invalid verification code. Please request a new code.',
+      });
+      return;
+    }
+
+    await pool.query('UPDATE password_resets SET verified = TRUE WHERE email = $1', [cleanEmail]);
+    res.status(200).json({ message: 'Verification successful. You can now set a new password.' });
+  } catch (err) {
+    console.error('Verify reset OTP error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Step 3: Set the new password
+router.post('/reset-password', async (req: Request, res: Response): Promise<void> => {
+  const { email, otp, new_password } = req.body ?? {};
+
+  const emailCheck = validateEmail(email);
+  if (!emailCheck.valid || typeof otp !== 'string' || !otp.trim()) {
+    res.status(400).json({ error: 'Email and verification code are required' });
+    return;
+  }
+  const passwordCheck = validatePassword(new_password);
+  if (!passwordCheck.valid) {
+    res.status(400).json({ error: passwordCheck.error });
+    return;
+  }
+
+  const cleanEmail = normalizeEmail(email);
+
+  try {
+    const result = await pool.query(
+      'SELECT otp_hash, otp_expires_at, attempts, verified FROM password_resets WHERE email = $1',
+      [cleanEmail]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(400).json({ error: 'Invalid or expired reset request. Please start over.' });
+      return;
+    }
+
+    const record = result.rows[0];
+
+    if (record.attempts >= MAX_OTP_ATTEMPTS) {
+      res.status(429).json({ error: 'Too many incorrect attempts. Please request a new code.' });
+      return;
+    }
+
+    if (new Date() > new Date(record.otp_expires_at)) {
+      res.status(400).json({ error: 'Verification code has expired. Please request a new one.' });
+      return;
+    }
+
+    if (!record.verified) {
+      res.status(403).json({ error: 'Please verify the code sent to your email first.' });
+      return;
+    }
+
+    // Re-check the code at the final step so a "verified" row can't be used
+    // without presenting the actual OTP.
+    if (record.otp_hash !== hashOtp(otp.trim())) {
+      await pool.query('UPDATE password_resets SET attempts = attempts + 1 WHERE email = $1', [cleanEmail]);
+      res.status(401).json({ error: 'Invalid verification code.' });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(new_password, 12);
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const upd = await client.query(
+        'UPDATE users SET password_hash = $2 WHERE email = $1 RETURNING id',
+        [cleanEmail, passwordHash]
+      );
+
+      if (upd.rows.length === 0) {
+        await client.query('ROLLBACK');
+        res.status(404).json({ error: 'Account not found.' });
+        return;
+      }
+
+      // Consume the reset so the code can't be replayed.
+      await client.query('DELETE FROM password_resets WHERE email = $1', [cleanEmail]);
+      await client.query('COMMIT');
+    } catch (txErr) {
+      await client.query('ROLLBACK');
+      throw txErr;
+    } finally {
+      client.release();
+    }
+
+    res.status(200).json({ success: true, message: 'Your password has been reset. You can now sign in.' });
+  } catch (err) {
+    console.error('Reset password error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

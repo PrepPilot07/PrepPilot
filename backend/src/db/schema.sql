@@ -26,6 +26,19 @@ CREATE TABLE IF NOT EXISTS email_verifications (
   created_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Password reset OTPs — one pending reset per email. otp_hash is a SHA-256
+-- digest of the 6-digit code (never stored in plaintext). Kept separate from
+-- email_verifications so the signup and reset flows never interfere.
+CREATE TABLE IF NOT EXISTS password_resets (
+  email            TEXT PRIMARY KEY,
+  otp_hash         TEXT NOT NULL,
+  otp_expires_at   TIMESTAMPTZ NOT NULL,
+  attempts         INT NOT NULL DEFAULT 0,
+  verified         BOOLEAN NOT NULL DEFAULT FALSE,
+  last_sent_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS users (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email            TEXT UNIQUE NOT NULL,

@@ -16,6 +16,7 @@
     "migrate:practice-answers": "tsx src/db/run-migration.ts 007_practice_answers.sql",
     "migrate:notifications": "tsx src/db/run-migration.ts 008_notifications.sql",
     "migrate:roadmap-link": "tsx src/db/run-migration.ts 009_roadmap_analysis_link.sql",
+    "migrate:password-resets": "tsx src/db/run-migration.ts 012_password_resets.sql",
     "scenario:roadmap": "tsx scripts/roadmap-scenario.ts"
   },
   "keywords": [],

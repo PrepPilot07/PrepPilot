@@ -1,21 +1,23 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { authApi } from '../api/auth';
-import { useAuth } from '../store/AuthContext';
 
-export default function SignupPage() {
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+type Step = 'email' | 'otp' | 'password' | 'done';
+
+const MAX_EMAIL_LENGTH = 254;
+
+export default function ForgotPasswordPage() {
+  const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
-  const [name, setName] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
+
   const [showPassword, setShowPassword] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+
   const navigate = useNavigate();
 
   const passwordStrength = (() => {
@@ -32,78 +34,6 @@ export default function SignupPage() {
     return { level: 4, label: 'Strong', color: 'bg-emerald-500' };
   })();
 
-  const handleRequestOtp = async (e: FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      setError('Please enter a valid email address.');
-      return;
-    }
-
-    setLoading(true);
-    const result = await authApi.requestSignupOTP(email);
-    setLoading(false);
-
-    if (result.error) {
-      if (result.status === 409) {
-        setError('An account with this email already exists. Try logging in instead.');
-      } else {
-        setError(result.error || 'Failed to send verification code.');
-      }
-      return;
-    }
-
-    setStep(2);
-    startResendCooldown();
-  };
-
-  const handleVerifyOtp = async (e: FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
-    
-    const result = await authApi.verifySignupOTP(email, otp);
-    setLoading(false);
-    
-    if (result.error) {
-      setError(result.error || 'Invalid verification code');
-      return;
-    }
-    
-    setStep(3);
-  };
-
-  const handleSignup = async (e: FormEvent) => {
-    e.preventDefault();
-    setError('');
-
-    if (!name.trim()) {
-      setError('Please enter your name.');
-      return;
-    }
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setError('Passwords do not match.');
-      return;
-    }
-
-    setLoading(true);
-    const result = await authApi.signup(email, password, name.trim());
-    setLoading(false);
-
-    if (result.error || !result.data) {
-      setError(result.error || 'Something went wrong. Please try again.');
-      return;
-    }
-
-    login(result.data.token, result.data.user);
-    navigate('/dashboard');
-  };
-
   const startResendCooldown = () => {
     setResendCooldown(60);
     const timer = setInterval(() => {
@@ -117,16 +47,105 @@ export default function SignupPage() {
     }, 1000);
   };
 
-  const handleResendOtp = async () => {
-    if (resendCooldown > 0) return;
+  // ── Step 1: request code ──
+  const handleRequestCode = async (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    const trimmed = email.trim();
+    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+    if (trimmed.length > MAX_EMAIL_LENGTH) {
+      setError(`Email must be at most ${MAX_EMAIL_LENGTH} characters.`);
+      return;
+    }
+
+    setLoading(true);
+    const result = await authApi.forgotPassword(trimmed);
+    setLoading(false);
+
+    if (result.error) {
+      setError(result.error || 'Something went wrong. Please try again.');
+      return;
+    }
+
+    // Backend responds the same whether or not the account exists.
+    setStep('otp');
+    startResendCooldown();
+  };
+
+  // ── Step 2: verify code ──
+  const handleVerifyOtp = async (e: FormEvent) => {
+    e.preventDefault();
     setError('');
     setLoading(true);
-    const result = await authApi.requestSignupOTP(email);
+
+    const result = await authApi.verifyResetOTP(email.trim(), otp);
     setLoading(false);
-    
+
     if (result.error) {
-      setError(result.error || 'Failed to resend code');
+      if (result.status === 429) {
+        setError('Too many incorrect attempts. Please request a new code.');
+      } else {
+        setError(result.error || 'Invalid verification code.');
+      }
+      return;
+    }
+
+    setStep('password');
+  };
+
+  // ── Step 3: set new password ──
+  const handleResetPassword = async (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
+    if (password.length > 128) {
+      setError('Password must be at most 128 characters.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    setLoading(true);
+    const result = await authApi.resetPassword(email.trim(), otp, password);
+    setLoading(false);
+
+    if (result.error || !result.data) {
+      // Code expired / attempts exhausted — send the user back to re-request.
+      if (result.status === 429 || result.status === 400) {
+        setError(result.error || 'Your reset code is no longer valid. Please request a new one.');
+        setStep('otp');
+      } else if (result.status === 403) {
+        setError('Please verify the code sent to your email first.');
+        setStep('otp');
+      } else {
+        setError(result.error || 'Something went wrong. Please try again.');
+      }
+      return;
+    }
+
+    setStep('done');
+  };
+
+  const handleResend = async () => {
+    if (resendCooldown > 0 || loading) return;
+    setError('');
+    setLoading(true);
+    const result = await authApi.forgotPassword(email.trim());
+    setLoading(false);
+    if (result.error) {
+      setError(result.error || 'Failed to resend code.');
     } else {
+      setOtp('');
       startResendCooldown();
     }
   };
@@ -136,14 +155,12 @@ export default function SignupPage() {
 
       {/* ── Left: Branding panel ────────────────────────────────────────────── */}
       <div className="hidden lg:flex lg:w-[52%] relative overflow-hidden bg-gradient-to-br from-emerald-600 via-emerald-500 to-teal-500">
-        {/* Decorative layers */}
         <div className="absolute inset-0">
           <div className="absolute top-0 left-0 w-full h-full opacity-[0.07]"
             style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '32px 32px' }} />
-          <div className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full bg-white/10 blur-3xl" />
-          <div className="absolute -bottom-32 -left-32 w-[400px] h-[400px] rounded-full bg-teal-400/20 blur-3xl" />
+          <div className="absolute -top-40 -right-40 w-[500px] h-[500px] rounded-full bg-white/10 blur-3xl login-orb" />
+          <div className="absolute -bottom-32 -left-32 w-[400px] h-[400px] rounded-full bg-teal-400/20 blur-3xl login-orb login-orb-delay" />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full border border-white/10" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] rounded-full border border-white/5" />
         </div>
 
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
@@ -159,21 +176,21 @@ export default function SignupPage() {
           <div className="max-w-md">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/15 backdrop-blur-sm border border-white/20 mb-8">
               <span className="w-2 h-2 rounded-full bg-emerald-200 animate-pulse" />
-              <span className="text-white/90 text-xs font-medium tracking-wide">Start Your Prep Journey</span>
+              <span className="text-white/90 text-xs font-medium tracking-wide">Account Recovery</span>
             </div>
             <h1 className="text-[2.75rem] font-extrabold text-white leading-[1.1] mb-5 tracking-tight">
-              Your interview<br />coach awaits.
+              Locked out?<br />Let's fix that.
             </h1>
             <p className="text-white/70 text-[15px] leading-relaxed max-w-sm">
-              Upload your resume and target job description. We'll build a personalised prep roadmap, send you daily questions, and track your readiness.
+              We'll email you a secure 6-digit code to confirm it's really you, then you can choose a fresh password and get straight back to your prep.
             </p>
 
-            {/* Feature highlights */}
+            {/* Steps */}
             <div className="mt-10 space-y-4">
               {[
-                { icon: '01', text: 'AI-powered skill gap analysis' },
-                { icon: '02', text: '15-day personalised prep roadmap' },
-                { icon: '03', text: 'Daily questions with instant feedback' },
+                { icon: '01', text: 'Confirm your email address' },
+                { icon: '02', text: 'Enter the 6-digit code we send' },
+                { icon: '03', text: 'Set a brand-new password' },
               ].map(item => (
                 <div key={item.icon} className="flex items-center gap-4">
                   <div className="w-9 h-9 rounded-xl bg-white/15 border border-white/15 flex items-center justify-center text-white/70 text-xs font-bold backdrop-blur-sm">
@@ -185,21 +202,12 @@ export default function SignupPage() {
             </div>
           </div>
 
-          {/* Bottom */}
-          <div className="flex items-center gap-3">
-            <div className="flex -space-x-2">
-              {['#34d399','#6ee7b7','#a7f3d0'].map((bg, i) => (
-                <div key={i} className="w-8 h-8 rounded-full border-2 border-emerald-600" style={{ backgroundColor: bg }} />
-              ))}
-            </div>
-            <p className="text-white/50 text-xs">Join candidates preparing smarter, not harder.</p>
-          </div>
+          <p className="text-white/50 text-xs">Your code expires in 15 minutes. Never share it with anyone.</p>
         </div>
       </div>
 
-      {/* ── Right: Signup form ──────────────────────────────────────────────── */}
+      {/* ── Right: Form ─────────────────────────────────────────────────────── */}
       <div className="flex-1 flex items-center justify-center p-6 sm:p-8 relative">
-        {/* Subtle background */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           <div className="absolute top-20 right-20 w-72 h-72 bg-emerald-50 rounded-full blur-3xl opacity-60" />
           <div className="absolute bottom-20 left-20 w-56 h-56 bg-teal-50 rounded-full blur-3xl opacity-40" />
@@ -217,18 +225,20 @@ export default function SignupPage() {
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-[1.75rem] font-extrabold text-gray-900 tracking-tight">
-              {step === 1 && 'Create your account'}
-              {step === 2 && 'Check your email'}
-              {step === 3 && 'Complete your profile'}
+              {step === 'email' && 'Forgot your password?'}
+              {step === 'otp' && 'Check your email'}
+              {step === 'password' && 'Set a new password'}
+              {step === 'done' && 'Password reset'}
             </h1>
             <p className="text-gray-500 text-[15px] mt-2">
-              {step === 1 && 'Start your personalised interview prep today.'}
-              {step === 2 && `We sent a 6-digit code to ${email}`}
-              {step === 3 && 'Almost there! Create a strong password.'}
+              {step === 'email' && "Enter your email and we'll send you a reset code."}
+              {step === 'otp' && `If an account exists, a 6-digit code is on its way to ${email}`}
+              {step === 'password' && 'Choose a strong password you haven’t used before.'}
+              {step === 'done' && 'Your password has been updated successfully.'}
             </p>
           </div>
 
-          {/* Error Message */}
+          {/* Error */}
           {error && (
             <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-100 rounded-xl mb-6" role="alert">
               <svg className="w-5 h-5 text-red-500 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -241,10 +251,10 @@ export default function SignupPage() {
           )}
 
           {/* ── STEP 1: Email ── */}
-          {step === 1 && (
-            <form onSubmit={handleRequestOtp} className="space-y-4" noValidate>
+          {step === 'email' && (
+            <form onSubmit={handleRequestCode} className="space-y-4" noValidate>
               <div>
-                <label htmlFor="signup-email" className="block text-[13px] font-semibold text-gray-700 mb-2">
+                <label htmlFor="reset-email" className="block text-[13px] font-semibold text-gray-700 mb-2">
                   Email address
                 </label>
                 <div className="relative">
@@ -255,31 +265,32 @@ export default function SignupPage() {
                     </svg>
                   </div>
                   <input
-                    id="signup-email"
+                    id="reset-email"
                     type="email"
-                    maxLength={254}
+                    maxLength={MAX_EMAIL_LENGTH}
                     className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-sm placeholder-gray-400 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 focus:text-black transition-all duration-200"
                     placeholder="you@email.com"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     required
                     autoFocus
+                    autoComplete="email"
                   />
                 </div>
               </div>
-              
+
               <button
                 type="submit"
                 disabled={loading || !email.trim()}
                 className="w-full py-3.5 px-6 rounded-xl font-semibold text-[15px] text-white bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50 transition-all shadow-lg shadow-emerald-600/20 mt-2"
               >
-                {loading ? 'Sending Code...' : 'Continue'}
+                {loading ? 'Sending Code...' : 'Send reset code'}
               </button>
             </form>
           )}
 
           {/* ── STEP 2: OTP ── */}
-          {step === 2 && (
+          {step === 'otp' && (
             <form onSubmit={handleVerifyOtp} className="space-y-4" noValidate>
               <div>
                 <label className="block text-[13px] font-semibold text-gray-700 mb-2">
@@ -287,6 +298,7 @@ export default function SignupPage() {
                 </label>
                 <input
                   type="text"
+                  inputMode="numeric"
                   maxLength={6}
                   className="w-full px-4 py-3.5 rounded-xl bg-gray-50 border border-gray-200 text-black font-extrabold text-center text-xl tracking-[0.5em] placeholder-gray-300 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 transition-all"
                   placeholder="------"
@@ -302,13 +314,13 @@ export default function SignupPage() {
                 disabled={loading || otp.length !== 6}
                 className="w-full py-3.5 px-6 rounded-xl font-semibold text-[15px] text-white bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50 transition-all shadow-lg shadow-emerald-600/20 mt-2"
               >
-                {loading ? 'Verifying...' : 'Verify Email'}
+                {loading ? 'Verifying...' : 'Verify code'}
               </button>
 
               <div className="text-center mt-4 flex items-center justify-center gap-4">
                 <button
                   type="button"
-                  onClick={() => setStep(1)}
+                  onClick={() => { setStep('email'); setError(''); setOtp(''); }}
                   className="text-sm text-gray-500 hover:text-gray-700 font-medium"
                 >
                   Change Email
@@ -316,7 +328,7 @@ export default function SignupPage() {
                 <span className="text-gray-300">|</span>
                 <button
                   type="button"
-                  onClick={handleResendOtp}
+                  onClick={handleResend}
                   disabled={resendCooldown > 0 || loading}
                   className="text-sm text-emerald-600 hover:text-emerald-700 font-medium disabled:text-gray-400"
                 >
@@ -326,36 +338,12 @@ export default function SignupPage() {
             </form>
           )}
 
-          {/* ── STEP 3: Password & Name ── */}
-          {step === 3 && (
-            <form onSubmit={handleSignup} className="space-y-4" noValidate>
+          {/* ── STEP 3: New password ── */}
+          {step === 'password' && (
+            <form onSubmit={handleResetPassword} className="space-y-4" noValidate>
               <div>
-                <label htmlFor="signup-name" className="block text-[13px] font-semibold text-gray-700 mb-2">
-                  Full name
-                </label>
-                <div className="relative">
-                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                      <circle cx="12" cy="7" r="4" />
-                    </svg>
-                  </div>
-                  <input
-                    id="signup-name"
-                    type="text"
-                    className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-sm placeholder-gray-400 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 focus:text-black transition-all duration-200"
-                    placeholder="John Doe"
-                    value={name}
-                    onChange={e => setName(e.target.value)}
-                    required
-                    autoFocus
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="signup-password" className="block text-[13px] font-semibold text-gray-700 mb-2">
-                  Password
+                <label htmlFor="reset-password" className="block text-[13px] font-semibold text-gray-700 mb-2">
+                  New password
                   <span className="ml-2 text-[11px] text-gray-400 font-normal">min 8 characters</span>
                 </label>
                 <div className="relative">
@@ -366,13 +354,16 @@ export default function SignupPage() {
                     </svg>
                   </div>
                   <input
-                    id="signup-password"
+                    id="reset-password"
                     type={showPassword ? 'text' : 'password'}
+                    maxLength={128}
                     className="w-full pl-11 pr-12 py-3.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-sm placeholder-gray-400 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 focus:text-black transition-all duration-200"
                     placeholder="Create a strong password"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     required
+                    autoFocus
+                    autoComplete="new-password"
                   />
                   <button
                     type="button"
@@ -394,7 +385,6 @@ export default function SignupPage() {
                     )}
                   </button>
                 </div>
-                {/* Password strength indicator */}
                 {password.length > 0 && (
                   <div className="mt-2.5 flex items-center gap-3">
                     <div className="flex-1 flex gap-1">
@@ -415,7 +405,7 @@ export default function SignupPage() {
               </div>
 
               <div>
-                <label htmlFor="signup-confirm-password" className="block text-[13px] font-semibold text-gray-700 mb-2">
+                <label htmlFor="reset-confirm-password" className="block text-[13px] font-semibold text-gray-700 mb-2">
                   Confirm password
                 </label>
                 <div className="relative">
@@ -425,15 +415,16 @@ export default function SignupPage() {
                     </svg>
                   </div>
                   <input
-                    id="signup-confirm-password"
+                    id="reset-confirm-password"
                     type="password"
+                    maxLength={128}
                     className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-gray-50 border border-gray-200 text-gray-900 text-sm placeholder-gray-400 outline-none focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 focus:text-black transition-all duration-200"
                     placeholder="Re-enter your password"
                     value={confirmPassword}
                     onChange={e => setConfirmPassword(e.target.value)}
                     required
+                    autoComplete="new-password"
                   />
-                  {/* Match indicator */}
                   {confirmPassword.length > 0 && (
                     <div className="absolute right-4 top-1/2 -translate-y-1/2">
                       {password === confirmPassword ? (
@@ -456,32 +447,50 @@ export default function SignupPage() {
                 disabled={loading}
                 className="w-full py-3.5 px-6 rounded-xl font-semibold text-[15px] text-white bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg shadow-emerald-600/20 mt-2"
               >
-                {loading ? 'Creating account...' : 'Create account'}
+                {loading ? 'Resetting...' : 'Reset password'}
               </button>
             </form>
           )}
 
-          {/* Divider */}
-          {step === 1 && (
+          {/* ── STEP 4: Done ── */}
+          {step === 'done' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-center">
+                <div className="w-16 h-16 rounded-2xl bg-emerald-100 flex items-center justify-center">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/login')}
+                className="w-full py-3.5 px-6 rounded-xl font-semibold text-[15px] text-white bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] transition-all shadow-lg shadow-emerald-600/20"
+              >
+                Back to sign in
+              </button>
+            </div>
+          )}
+
+          {/* Back link */}
+          {step !== 'done' && (
             <>
               <div className="flex items-center gap-4 my-6">
                 <div className="flex-1 h-px bg-gray-200" />
                 <span className="text-xs text-gray-400 font-medium">or</span>
                 <div className="flex-1 h-px bg-gray-200" />
               </div>
-
               <p className="text-center text-sm text-gray-500">
-                Already have an account?{' '}
-                <Link to="/login" id="go-to-login" className="text-emerald-600 hover:text-emerald-700 font-semibold transition-colors">
-                  Sign in
+                Remembered it?{' '}
+                <Link to="/login" className="text-emerald-600 hover:text-emerald-700 font-semibold transition-colors">
+                  Back to sign in
                 </Link>
               </p>
             </>
           )}
 
-          {/* Footer */}
           <p className="text-center text-[11px] text-gray-400 mt-8">
-            By creating an account you agree to our Terms of Service.<br />
+            For your security, reset codes expire after 15 minutes.<br />
             No spam, ever. Only your coach.
           </p>
         </div>

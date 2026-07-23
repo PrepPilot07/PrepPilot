@@ -35,8 +35,15 @@ Tokens are issued by `/auth/signup` and `/auth/login`, signed with `JWT_SECRET`,
 | Method | Path | Auth |
 |---|---|---|
 | GET | `/health` | — |
+| POST | `/auth/request-signup-otp` | — |
+| POST | `/auth/verify-signup-otp` | — |
 | POST | `/auth/signup` | — |
 | POST | `/auth/login` | — |
+| POST | `/auth/verify-otp` | — |
+| POST | `/auth/resend-otp` | — |
+| POST | `/auth/forgot-password` | — |
+| POST | `/auth/verify-reset-otp` | — |
+| POST | `/auth/reset-password` | — |
 | GET | `/profile/me` | ✓ |
 | PUT | `/profile` | ✓ |
 | PATCH | `/profile/password` | ✓ |
@@ -110,6 +117,54 @@ Tokens are issued by `/auth/signup` and `/auth/login`, signed with `JWT_SECRET`,
 |---|---|
 | 400 | Missing email or password |
 | 401 | `{ "error": "Invalid email or password" }` — same message for unknown email and wrong password, so accounts can't be enumerated |
+
+### Signup email verification
+
+Signup is a three-step wizard: `request-signup-otp` → `verify-signup-otp` → `signup`. Codes live in the `email_verifications` table, are six digits, and expire after 15 minutes.
+
+- **`POST /auth/request-signup-otp`** `{ email }` → **200** `{ "message": "OTP sent to email." }`. **400** invalid/over-length email · **409** an account already exists.
+- **`POST /auth/verify-signup-otp`** `{ email, otp }` → **200** on success. **401** wrong/expired code · **404** no pending verification.
+- **`POST /auth/signup`** additionally returns **403** `{ "error": "Email is not verified." }` if the email wasn't verified first.
+- **`POST /auth/verify-otp`** / **`POST /auth/resend-otp`** — verify/resend for a legacy unverified `users` row (login returns **403** with `verificationRequired: true` for those accounts).
+
+Email validation (shared by signup and reset): valid format, **≤ 254 chars** total, local part **≤ 64 chars**. Passwords are **8–128 chars**.
+
+### Password reset
+
+Three steps mirror signup: `forgot-password` → `verify-reset-otp` → `reset-password`. Codes are stored **hashed** (SHA-256) in the `password_resets` table, expire after **15 minutes**, and lock after **5** wrong guesses.
+
+#### `POST /auth/forgot-password`
+```json
+{ "email": "you@email.com" }
+```
+Always **200** `{ "message": "If an account exists for that email, a password reset code has been sent." }` — the response is identical whether or not the account exists, so it can't be used to enumerate registered emails. A real account receives an emailed code; repeat sends within 30s are silently throttled. **400** only for a missing/malformed email.
+
+#### `POST /auth/verify-reset-otp`
+```json
+{ "email": "you@email.com", "otp": "123456" }
+```
+**200** on success (marks the code verified). 
+
+| Status | When |
+|---|---|
+| 400 | Missing fields · no pending/expired code |
+| 401 | `{ "error": "Invalid verification code. N attempts remaining." }` |
+| 429 | `{ "error": "Too many incorrect attempts. Please request a new code." }` |
+
+#### `POST /auth/reset-password`
+```json
+{ "email": "you@email.com", "otp": "123456", "new_password": "at-least-8-chars" }
+```
+Re-checks the code (so a verified row still can't be used without the OTP), updates the password and consumes the reset row in one transaction.
+
+**200** → `{ "success": true, "message": "Your password has been reset. You can now sign in." }`
+
+| Status | When |
+|---|---|
+| 400 | Missing fields · `new_password` outside 8–128 · no pending/expired code |
+| 401 | Wrong code |
+| 403 | Code not verified yet |
+| 429 | Too many incorrect attempts |
 
 ---
 
